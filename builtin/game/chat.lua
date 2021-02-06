@@ -651,7 +651,9 @@ core.register_chatcommand("mods", {
 	description = "List mods installed on the server",
 	privs = {},
 	func = function(name, param)
-		return true, table.concat(core.get_modnames(), ", ")
+		core.show_formspec(name, "modslist",
+			build_mods_formspec())
+		return true
 	end,
 })
 
