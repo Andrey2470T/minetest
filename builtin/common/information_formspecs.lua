@@ -137,7 +137,7 @@ local function get_modpack_mods(mp_name)
 
 	local modlist = {}
 	for i, mname in ipairs(modnames) do
-		local mpath = core.get_modpath(mname) 
+		local mpath = core.get_modpath(mname)
 		if mpath:match(DIR_DELIM .. mp_name .. DIR_DELIM) then
 			table.insert(modlist, mname)
 		end
