@@ -68,6 +68,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "util/pointedthing.h"
 #include "util/quicktune_shortcutter.h"
 #include "irrlicht_changes/static_text.h"
+#include "irr_ptr.h"
 #include "version.h"
 #include "script/scripting_client.h"
 #include "hud.h"
@@ -171,13 +172,7 @@ struct LocalFormspecHandler : public TextDest
 				return;
 			}
 
-			if (fields.find("quit") != fields.end()) {
-				return;
-			}
-
-			if (fields.find("btn_continue") != fields.end()) {
-				return;
-			}
+			return;
 		}
 
 		if (m_formname == "MT_DEATH_SCREEN") {
@@ -186,7 +181,7 @@ struct LocalFormspecHandler : public TextDest
 			return;
 		}
 
-		if (m_client && m_client->modsLoaded())
+		if (m_client->modsLoaded())
 			m_client->getScript()->on_formspec_input(m_formname, fields);
 	}
 
@@ -424,14 +419,13 @@ class GameGlobalShaderConstantSetter : public IShaderConstantSetter
 	CachedVertexShaderSetting<float> m_animation_timer_vertex;
 	CachedPixelShaderSetting<float> m_animation_timer_pixel;
 	CachedPixelShaderSetting<float, 3> m_day_light;
+	CachedPixelShaderSetting<float, 4> m_star_color;
 	CachedPixelShaderSetting<float, 3> m_eye_position_pixel;
 	CachedVertexShaderSetting<float, 3> m_eye_position_vertex;
 	CachedPixelShaderSetting<float, 3> m_minimap_yaw;
 	CachedPixelShaderSetting<float, 3> m_camera_offset_pixel;
 	CachedPixelShaderSetting<float, 3> m_camera_offset_vertex;
 	CachedPixelShaderSetting<SamplerLayer_t> m_base_texture;
-	CachedPixelShaderSetting<SamplerLayer_t> m_normal_texture;
-	CachedPixelShaderSetting<SamplerLayer_t> m_texture_flags;
 	Client *m_client;
 
 public:
@@ -458,14 +452,13 @@ public:
 		m_animation_timer_vertex("animationTimer"),
 		m_animation_timer_pixel("animationTimer"),
 		m_day_light("dayLight"),
+		m_star_color("starColor"),
 		m_eye_position_pixel("eyePosition"),
 		m_eye_position_vertex("eyePosition"),
 		m_minimap_yaw("yawVec"),
 		m_camera_offset_pixel("cameraOffset"),
 		m_camera_offset_vertex("cameraOffset"),
 		m_base_texture("baseTexture"),
-		m_normal_texture("normalTexture"),
-		m_texture_flags("textureFlags"),
 		m_client(client)
 	{
 		g_settings->registerChangedCallback("enable_fog", settingsCallback, this);
@@ -477,12 +470,8 @@ public:
 		g_settings->deregisterChangedCallback("enable_fog", settingsCallback, this);
 	}
 
-	virtual void onSetConstants(video::IMaterialRendererServices *services,
-			bool is_highlevel)
+	void onSetConstants(video::IMaterialRendererServices *services) override
 	{
-		if (!is_highlevel)
-			return;
-
 		// Background color
 		video::SColor bgcolor = m_sky->getBgColor();
 		video::SColorf bgcolorf(bgcolor);
@@ -510,6 +499,10 @@ public:
 			sunlight.g,
 			sunlight.b };
 		m_day_light.set(dnc, services);
+
+		video::SColorf star_color = m_sky->getCurrentStarColor();
+		float clr[4] = {star_color.r, star_color.g, star_color.b, star_color.a};
+		m_star_color.set(clr, services);
 
 		u32 animation_timer = porting::getTimeMs() % 1000000;
 		float animation_timer_f = (float)animation_timer / 100000.f;
@@ -553,12 +546,8 @@ public:
 		m_camera_offset_pixel.set(camera_offset_array, services);
 		m_camera_offset_vertex.set(camera_offset_array, services);
 
-		SamplerLayer_t base_tex = 0,
-				normal_tex = 1,
-				flags_tex = 2;
+		SamplerLayer_t base_tex = 0;
 		m_base_texture.set(&base_tex, services);
-		m_normal_texture.set(&normal_tex, services);
-		m_texture_flags.set(&flags_tex, services);
 	}
 };
 
@@ -589,7 +578,7 @@ public:
 
 	virtual IShaderConstantSetter* create()
 	{
-		GameGlobalShaderConstantSetter *scs = new GameGlobalShaderConstantSetter(
+		auto *scs = new GameGlobalShaderConstantSetter(
 				m_sky, m_force_fog_off, m_fog_range, m_client);
 		if (!m_sky)
 			created_nosky.push_back(scs);
@@ -658,6 +647,8 @@ struct ClientEventHandler
 /****************************************************************************
  THE GAME
  ****************************************************************************/
+
+using PausedNodesList = std::vector<std::pair<irr_ptr<scene::IAnimatedMeshSceneNode>, float>>;
 
 /* This is not intended to be a public class. If a public class becomes
  * desirable then it may be better to create another 'wrapper' class that
@@ -808,6 +799,9 @@ private:
 	void showDeathFormspec();
 	void showPauseMenu();
 
+	void pauseAnimation();
+	void resumeAnimation();
+
 	// ClientEvent handlers
 	void handleClientEvent_None(ClientEvent *event, CameraOrientation *cam);
 	void handleClientEvent_PlayerDamage(ClientEvent *event, CameraOrientation *cam);
@@ -868,6 +862,9 @@ private:
 	Hud *hud = nullptr;
 	Minimap *mapper = nullptr;
 
+	// Map server hud ids to client hud ids
+	std::unordered_map<u32, u32> m_hud_server_to_client;
+
 	GameRunData runData;
 	Flags m_flags;
 
@@ -882,6 +879,7 @@ private:
 	std::string *error_message;
 	bool *reconnect_requested;
 	scene::ISceneNode *skybox;
+	PausedNodesList paused_animated_nodes;
 
 	bool simple_singleplayer_mode;
 	/* End 'cache' */
@@ -917,6 +915,7 @@ private:
 
 	bool m_does_lost_focus_pause_game = false;
 
+	int m_reset_HW_buffer_counter = 0;
 #ifdef __ANDROID__
 	bool m_cache_hold_aux1;
 	bool m_android_chat_open;
@@ -1343,7 +1342,7 @@ bool Game::createClient(const GameStartData &start_data)
 		return false;
 	}
 
-	GameGlobalShaderConstantSetterFactory *scsf = new GameGlobalShaderConstantSetterFactory(
+	auto *scsf = new GameGlobalShaderConstantSetterFactory(
 			&m_flags.force_fog_off, &runData.fog_range, client);
 	shader_src->addShaderConstantSetterFactory(scsf);
 
@@ -1353,32 +1352,20 @@ bool Game::createClient(const GameStartData &start_data)
 	/* Camera
 	 */
 	camera = new Camera(*draw_control, client);
-	if (!camera || !camera->successfullyCreated(*error_message))
+	if (!camera->successfullyCreated(*error_message))
 		return false;
 	client->setCamera(camera);
 
 	/* Clouds
 	 */
-	if (m_cache_enable_clouds) {
+	if (m_cache_enable_clouds)
 		clouds = new Clouds(smgr, -1, time(0));
-		if (!clouds) {
-			*error_message = "Memory allocation error (clouds)";
-			errorstream << *error_message << std::endl;
-			return false;
-		}
-	}
 
 	/* Skybox
 	 */
-	sky = new Sky(-1, texture_src);
+	sky = new Sky(-1, texture_src, shader_src);
 	scsf->setSky(sky);
 	skybox = NULL;	// This is used/set later on in the main run loop
-
-	if (!sky) {
-		*error_message = "Memory allocation error sky";
-		errorstream << *error_message << std::endl;
-		return false;
-	}
 
 	/* Pre-calculated values
 	 */
@@ -1409,18 +1396,10 @@ bool Game::createClient(const GameStartData &start_data)
 
 	hud = new Hud(guienv, client, player, &player->inventory);
 
-	if (!hud) {
-		*error_message = "Memory error: could not create HUD";
-		errorstream << *error_message << std::endl;
-		return false;
-	}
-
 	mapper = client->getMinimap();
-	if (mapper) {
-		mapper->setMinimapMode(MINIMAP_MODE_OFF);
-		if (client->modsLoaded())
-			client->getScript()->on_minimap_ready(mapper);
-	}
+
+	if (mapper && client->modsLoaded())
+		client->getScript()->on_minimap_ready(mapper);
 
 	return true;
 }
@@ -1438,11 +1417,6 @@ bool Game::initGui()
 	// Chat backend and console
 	gui_chat_console = new GUIChatConsole(guienv, guienv->getRootGUIElement(),
 			-1, chat_backend, client, &g_menumgr);
-	if (!gui_chat_console) {
-		*error_message = "Could not allocate memory for chat console";
-		errorstream << *error_message << std::endl;
-		return false;
-	}
 
 #ifdef HAVE_TOUCHSCREENGUI
 
@@ -1498,9 +1472,6 @@ bool Game::connectToServer(const GameStartData &start_data,
 			*draw_control, texture_src, shader_src,
 			itemdef_manager, nodedef_manager, sound, eventmgr,
 			connect_address.isIPv6(), m_game_ui.get());
-
-	if (!client)
-		return false;
 
 	client->m_simple_singleplayer_mode = simple_singleplayer_mode;
 
@@ -1650,7 +1621,10 @@ bool Game::getServerContent(bool *aborted)
 			std::stringstream message;
 			std::fixed(message);
 			message.precision(0);
-			message << gettext("Media...") << " " << (client->mediaReceiveProgress()*100) << "%";
+			float receive = client->mediaReceiveProgress() * 100;
+			message << gettext("Media...");
+			if (receive > 0)
+				message << " " << receive << "%";
 			message.precision(2);
 
 			if ((USE_CURL == 0) ||
@@ -2020,15 +1994,11 @@ void Game::processItemSelection(u16 *new_playeritem)
 
 	s32 dir = wheel;
 
-	if (input->joystick.wasKeyDown(KeyType::SCROLL_DOWN) ||
-			wasKeyDown(KeyType::HOTBAR_NEXT)) {
+	if (wasKeyDown(KeyType::HOTBAR_NEXT))
 		dir = -1;
-	}
 
-	if (input->joystick.wasKeyDown(KeyType::SCROLL_UP) ||
-			wasKeyDown(KeyType::HOTBAR_PREV)) {
+	if (wasKeyDown(KeyType::HOTBAR_PREV))
 		dir = 1;
-	}
 
 	if (dir < 0)
 		*new_playeritem = *new_playeritem < max_item ? *new_playeritem + 1 : 0;
@@ -2081,7 +2051,7 @@ void Game::openInventory()
 		TextDest *txt_dst = new TextDestPlayerInventory(client);
 		auto *&formspec = m_game_ui->updateFormspec("");
 		GUIFormSpecMenu::create(formspec, client, &input->joystick, fs_src,
-			txt_dst, client->getFormspecPrepend());
+			txt_dst, client->getFormspecPrepend(), sound);
 
 		formspec->setFormSpec(fs_src->getForm(), inventoryloc);
 	}
@@ -2222,52 +2192,37 @@ void Game::toggleMinimap(bool shift_pressed)
 	if (!mapper || !m_game_ui->m_flags.show_hud || !g_settings->getBool("enable_minimap"))
 		return;
 
-	if (shift_pressed) {
+	if (shift_pressed)
 		mapper->toggleMinimapShape();
-		return;
-	}
+	else
+		mapper->nextMode();
 
+	// TODO: When legacy minimap is deprecated, keep only HUD minimap stuff here
+
+	// Not so satisying code to keep compatibility with old fixed mode system
+	// -->
 	u32 hud_flags = client->getEnv().getLocalPlayer()->hud_flags;
 
-	MinimapMode mode = MINIMAP_MODE_OFF;
-	if (hud_flags & HUD_FLAG_MINIMAP_VISIBLE) {
-		mode = mapper->getMinimapMode();
-		mode = (MinimapMode)((int)mode + 1);
-		// If radar is disabled and in, or switching to, radar mode
-		if (!(hud_flags & HUD_FLAG_MINIMAP_RADAR_VISIBLE) && mode > 3)
-			mode = MINIMAP_MODE_OFF;
-	}
+	if (!(hud_flags & HUD_FLAG_MINIMAP_VISIBLE)) {
+		m_game_ui->m_flags.show_minimap = false;
+	} else {
 
-	m_game_ui->m_flags.show_minimap = true;
-	switch (mode) {
-		case MINIMAP_MODE_SURFACEx1:
-			m_game_ui->showTranslatedStatusText("Minimap in surface mode, Zoom x1");
-			break;
-		case MINIMAP_MODE_SURFACEx2:
-			m_game_ui->showTranslatedStatusText("Minimap in surface mode, Zoom x2");
-			break;
-		case MINIMAP_MODE_SURFACEx4:
-			m_game_ui->showTranslatedStatusText("Minimap in surface mode, Zoom x4");
-			break;
-		case MINIMAP_MODE_RADARx1:
-			m_game_ui->showTranslatedStatusText("Minimap in radar mode, Zoom x1");
-			break;
-		case MINIMAP_MODE_RADARx2:
-			m_game_ui->showTranslatedStatusText("Minimap in radar mode, Zoom x2");
-			break;
-		case MINIMAP_MODE_RADARx4:
-			m_game_ui->showTranslatedStatusText("Minimap in radar mode, Zoom x4");
-			break;
-		default:
-			mode = MINIMAP_MODE_OFF;
-			m_game_ui->m_flags.show_minimap = false;
-			if (hud_flags & HUD_FLAG_MINIMAP_VISIBLE)
-				m_game_ui->showTranslatedStatusText("Minimap hidden");
-			else
-				m_game_ui->showTranslatedStatusText("Minimap currently disabled by game or mod");
-	}
+	// If radar is disabled, try to find a non radar mode or fall back to 0
+		if (!(hud_flags & HUD_FLAG_MINIMAP_RADAR_VISIBLE))
+			while (mapper->getModeIndex() &&
+					mapper->getModeDef().type == MINIMAP_TYPE_RADAR)
+				mapper->nextMode();
 
-	mapper->setMinimapMode(mode);
+		m_game_ui->m_flags.show_minimap = mapper->getModeDef().type !=
+				MINIMAP_TYPE_OFF;
+	}
+	// <--
+	// End of 'not so satifying code'
+	if ((hud_flags & HUD_FLAG_MINIMAP_VISIBLE) ||
+			(hud && hud->hasElementOfType(HUD_ELEM_MINIMAP)))
+		m_game_ui->showStatusText(utf8_to_wide(mapper->getModeDef().label));
+	else
+		m_game_ui->showTranslatedStatusText("Minimap currently disabled by game or mod");
 }
 
 void Game::toggleFog()
@@ -2470,7 +2425,7 @@ void Game::updatePlayerControl(const CameraOrientation &cam)
 		input->isKeyDown(KeyType::LEFT),
 		input->isKeyDown(KeyType::RIGHT),
 		isKeyDown(KeyType::JUMP),
-		isKeyDown(KeyType::SPECIAL1),
+		isKeyDown(KeyType::AUX1),
 		isKeyDown(KeyType::SNEAK),
 		isKeyDown(KeyType::ZOOM),
 		isKeyDown(KeyType::DIG),
@@ -2487,7 +2442,7 @@ void Game::updatePlayerControl(const CameraOrientation &cam)
 			( (u32)(isKeyDown(KeyType::LEFT)                          & 0x1) << 2) |
 			( (u32)(isKeyDown(KeyType::RIGHT)                         & 0x1) << 3) |
 			( (u32)(isKeyDown(KeyType::JUMP)                          & 0x1) << 4) |
-			( (u32)(isKeyDown(KeyType::SPECIAL1)                      & 0x1) << 5) |
+			( (u32)(isKeyDown(KeyType::AUX1)                          & 0x1) << 5) |
 			( (u32)(isKeyDown(KeyType::SNEAK)                         & 0x1) << 6) |
 			( (u32)(isKeyDown(KeyType::DIG)                           & 0x1) << 7) |
 			( (u32)(isKeyDown(KeyType::PLACE)                         & 0x1) << 8) |
@@ -2536,11 +2491,41 @@ inline void Game::step(f32 *dtime)
 	if (can_be_and_is_paused) { // This is for a singleplayer server
 		*dtime = 0;             // No time passes
 	} else {
+		if (simple_singleplayer_mode && !paused_animated_nodes.empty())
+			resumeAnimation();
+
 		if (server)
 			server->step(*dtime);
 
 		client->step(*dtime);
 	}
+}
+
+static void pauseNodeAnimation(PausedNodesList &paused, scene::ISceneNode *node) {
+	if (!node)
+		return;
+	for (auto &&child: node->getChildren())
+		pauseNodeAnimation(paused, child);
+	if (node->getType() != scene::ESNT_ANIMATED_MESH)
+		return;
+	auto animated_node = static_cast<scene::IAnimatedMeshSceneNode *>(node);
+	float speed = animated_node->getAnimationSpeed();
+	if (!speed)
+		return;
+	paused.push_back({grab(animated_node), speed});
+	animated_node->setAnimationSpeed(0.0f);
+}
+
+void Game::pauseAnimation()
+{
+	pauseNodeAnimation(paused_animated_nodes, smgr->getRootSceneNode());
+}
+
+void Game::resumeAnimation()
+{
+	for (auto &&pair: paused_animated_nodes)
+		pair.first->setAnimationSpeed(pair.second);
+	paused_animated_nodes.clear();
 }
 
 const ClientEventHandler Game::clientEventHandler[CLIENTEVENT_MAX] = {
@@ -2628,7 +2613,7 @@ void Game::handleClientEvent_ShowFormSpec(ClientEvent *event, CameraOrientation 
 
 		auto *&formspec = m_game_ui->updateFormspec(*(event->show_formspec.formname));
 		GUIFormSpecMenu::create(formspec, client, &input->joystick,
-			fs_src, txt_dst, client->getFormspecPrepend());
+			fs_src, txt_dst, client->getFormspecPrepend(), sound);
 	}
 
 	delete event->show_formspec.formspec;
@@ -2641,7 +2626,7 @@ void Game::handleClientEvent_ShowLocalFormSpec(ClientEvent *event, CameraOrienta
 	LocalFormspecHandler *txt_dst =
 		new LocalFormspecHandler(*event->show_formspec.formname, client);
 	GUIFormSpecMenu::create(m_game_ui->getFormspecGUI(), client, &input->joystick,
-			fs_src, txt_dst, client->getFormspecPrepend());
+			fs_src, txt_dst, client->getFormspecPrepend(), sound);
 
 	delete event->show_formspec.formspec;
 	delete event->show_formspec.formname;
@@ -2657,12 +2642,11 @@ void Game::handleClientEvent_HandleParticleEvent(ClientEvent *event,
 void Game::handleClientEvent_HudAdd(ClientEvent *event, CameraOrientation *cam)
 {
 	LocalPlayer *player = client->getEnv().getLocalPlayer();
-	auto &hud_server_to_client = client->getHUDTranslationMap();
 
 	u32 server_id = event->hudadd.server_id;
 	// ignore if we already have a HUD with that ID
-	auto i = hud_server_to_client.find(server_id);
-	if (i != hud_server_to_client.end()) {
+	auto i = m_hud_server_to_client.find(server_id);
+	if (i != m_hud_server_to_client.end()) {
 		delete event->hudadd.pos;
 		delete event->hudadd.name;
 		delete event->hudadd.scale;
@@ -2690,7 +2674,7 @@ void Game::handleClientEvent_HudAdd(ClientEvent *event, CameraOrientation *cam)
 	e->size = *event->hudadd.size;
 	e->z_index = event->hudadd.z_index;
 	e->text2  = *event->hudadd.text2;
-	hud_server_to_client[server_id] = player->addHud(e);
+	m_hud_server_to_client[server_id] = player->addHud(e);
 
 	delete event->hudadd.pos;
 	delete event->hudadd.name;
@@ -2706,18 +2690,28 @@ void Game::handleClientEvent_HudAdd(ClientEvent *event, CameraOrientation *cam)
 void Game::handleClientEvent_HudRemove(ClientEvent *event, CameraOrientation *cam)
 {
 	LocalPlayer *player = client->getEnv().getLocalPlayer();
-	HudElement *e = player->removeHud(event->hudrm.id);
-	delete e;
+
+	auto i = m_hud_server_to_client.find(event->hudrm.id);
+	if (i != m_hud_server_to_client.end()) {
+		HudElement *e = player->removeHud(i->second);
+		delete e;
+		m_hud_server_to_client.erase(i);
+	}
+
 }
 
 void Game::handleClientEvent_HudChange(ClientEvent *event, CameraOrientation *cam)
 {
 	LocalPlayer *player = client->getEnv().getLocalPlayer();
 
-	u32 id = event->hudchange.id;
-	HudElement *e = player->getHud(id);
+	HudElement *e = nullptr;
 
-	if (e == NULL) {
+	auto i = m_hud_server_to_client.find(event->hudchange.id);
+	if (i != m_hud_server_to_client.end()) {
+		e = player->getHud(i->second);
+	}
+
+	if (e == nullptr) {
 		delete event->hudchange.v3fdata;
 		delete event->hudchange.v2fdata;
 		delete event->hudchange.sdata;
@@ -2950,7 +2944,8 @@ void Game::updateCamera(u32 busy_time, f32 dtime)
 
 		camera->toggleCameraMode();
 
-		playercao->setVisible(camera->getCameraMode() > CAMERA_MODE_FIRST);
+		// Make the player visible depending on camera mode.
+		playercao->updateMeshCulling();
 		playercao->setChildrenVisible(camera->getCameraMode() > CAMERA_MODE_FIRST);
 	}
 
@@ -3157,12 +3152,15 @@ void Game::processPlayerInteraction(f32 dtime, bool show_hud, bool show_debug)
 
 	input->clearWasKeyPressed();
 	input->clearWasKeyReleased();
+	// Ensure DIG & PLACE are marked as handled
+	wasKeyDown(KeyType::DIG);
+	wasKeyDown(KeyType::PLACE);
 
-	input->joystick.clearWasKeyDown(KeyType::MOUSE_L);
-	input->joystick.clearWasKeyDown(KeyType::MOUSE_R);
+	input->joystick.clearWasKeyPressed(KeyType::DIG);
+	input->joystick.clearWasKeyPressed(KeyType::PLACE);
 
-	input->joystick.clearWasKeyReleased(KeyType::MOUSE_L);
-	input->joystick.clearWasKeyReleased(KeyType::MOUSE_R);
+	input->joystick.clearWasKeyReleased(KeyType::DIG);
+	input->joystick.clearWasKeyReleased(KeyType::PLACE);
 }
 
 
@@ -3360,7 +3358,7 @@ bool Game::nodePlacement(const ItemDefinition &selected_def,
 
 		auto *&formspec = m_game_ui->updateFormspec("");
 		GUIFormSpecMenu::create(formspec, client, &input->joystick, fs_src,
-			txt_dst, client->getFormspecPrepend());
+			txt_dst, client->getFormspecPrepend(), sound);
 
 		formspec->setFormSpec(meta->getString("formspec"), inventoryloc);
 		return false;
@@ -3710,7 +3708,6 @@ void Game::handleDigging(const PointedThing &pointed, const v3s16 &nodepos,
 	camera->setDigging(0);  // Dig animation
 }
 
-
 void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 		const CameraOrientation &cam)
 {
@@ -3953,7 +3950,7 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 	/*
 		Update minimap pos and rotation
 	*/
-	if (mapper && m_game_ui->m_flags.show_minimap && m_game_ui->m_flags.show_hud) {
+	if (mapper && m_game_ui->m_flags.show_hud) {
 		mapper->setPos(floatToInt(player->getPosition(), BS));
 		mapper->setAngle(player->getYaw());
 	}
@@ -3961,6 +3958,27 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 	/*
 		End scene
 	*/
+	if (++m_reset_HW_buffer_counter > 500) {
+		/*
+		  Periodically remove all mesh HW buffers.
+
+		  Work around for a quirk in Irrlicht where a HW buffer is only
+		  released after 20000 iterations (triggered from endScene()).
+
+		  Without this, all loaded but unused meshes will retain their HW
+		  buffers for at least 5 minutes, at which point looking up the HW buffers
+		  becomes a bottleneck and the framerate drops (as much as 30%).
+
+		  Tests showed that numbers between 50 and 1000 are good, so picked 500.
+		  There are no other public Irrlicht APIs that allow interacting with the
+		  HW buffers without tracking the status of every individual mesh.
+
+		  The HW buffers for _visible_ meshes will be reinitialized in the next frame.
+		*/
+		infostream << "Game::updateFrame(): Removing all HW buffers." << std::endl;
+		driver->removeAllHardwareBuffers();
+		m_reset_HW_buffer_counter = 0;
+	}
 	driver->endScene();
 
 	stats->drawtime = tt_draw.stop(true);
@@ -3996,9 +4014,10 @@ inline void Game::limitFps(FpsControl *fps_timings, f32 *dtime)
 	else
 		fps_timings->busy_time = 0;
 
-	u32 frametime_min = 1000 / (g_menumgr.pausesGame()
-			? g_settings->getFloat("pause_fps_max")
-			: g_settings->getFloat("fps_max"));
+	u32 frametime_min = 1000 / (
+		device->isWindowFocused() && !g_menumgr.pausesGame()
+			? g_settings->getFloat("fps_max")
+			: g_settings->getFloat("fps_max_unfocused"));
 
 	if (fps_timings->busy_time < frametime_min) {
 		fps_timings->sleep_time = frametime_min - fps_timings->busy_time;
@@ -4111,7 +4130,7 @@ void Game::showDeathFormspec()
 
 	auto *&formspec = m_game_ui->getFormspecGUI();
 	GUIFormSpecMenu::create(formspec, client, &input->joystick,
-		fs_src, txt_dst, client->getFormspecPrepend());
+		fs_src, txt_dst, client->getFormspecPrepend(), sound);
 	formspec->setFocus("btn_respawn");
 }
 
@@ -4245,9 +4264,12 @@ void Game::showPauseMenu()
 
 	auto *&formspec = m_game_ui->getFormspecGUI();
 	GUIFormSpecMenu::create(formspec, client, &input->joystick,
-			fs_src, txt_dst, client->getFormspecPrepend());
+			fs_src, txt_dst, client->getFormspecPrepend(), sound);
 	formspec->setFocus("btn_continue");
 	formspec->doPause = true;
+
+	if (simple_singleplayer_mode)
+		pauseAnimation();
 }
 
 /****************************************************************************/

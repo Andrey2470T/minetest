@@ -31,10 +31,10 @@ Table of Contents
 
 Further documentation
 ----------------------
-- Website: http://minetest.net/
-- Wiki: http://wiki.minetest.net/
-- Developer wiki: http://dev.minetest.net/
-- Forum: http://forum.minetest.net/
+- Website: https://minetest.net/
+- Wiki: https://wiki.minetest.net/
+- Developer wiki: https://dev.minetest.net/
+- Forum: https://forum.minetest.net/
 - GitHub: https://github.com/minetest/minetest/
 - [doc/](doc/) directory of source distribution
 
@@ -68,7 +68,7 @@ Some can be changed in the key config dialog in the settings tab.
 | P                             | Enable/disable pitch move mode                                 |
 | J                             | Enable/disable fast mode (needs fast privilege)                |
 | H                             | Enable/disable noclip mode (needs noclip privilege)            |
-| E                             | Move fast in fast mode                                         |
+| E                             | Aux1 (Move fast in fast mode. Games may add special features)  |
 | C                             | Cycle through camera modes                                     |
 | V                             | Cycle through minimap modes                                    |
 | Shift + V                     | Change minimap orientation                                     |
@@ -314,13 +314,14 @@ It is highly recommended to use vcpkg as package manager.
 
 After you successfully built vcpkg you can easily install the required libraries:
 ```powershell
-vcpkg install irrlicht zlib curl[winssl] openal-soft libvorbis libogg sqlite3 freetype luajit --triplet x64-windows
+vcpkg install irrlicht zlib curl[winssl] openal-soft libvorbis libogg sqlite3 freetype luajit gmp jsoncpp --triplet x64-windows
 ```
 
 - `curl` is optional, but required to read the serverlist, `curl[winssl]` is required to use the content store.
 - `openal-soft`, `libvorbis` and `libogg` are optional, but required to use sound.
 - `freetype` is optional, it allows true-type font rendering.
 - `luajit` is optional, it replaces the integrated Lua interpreter with a faster just-in-time interpreter.
+- `gmp` and `jsoncpp` are optional, otherwise the bundled versions will be compiled
 
 There are other optional libraries, but they are not tested if they can build and link correctly.
 
@@ -353,7 +354,7 @@ This is outdated and not recommended. Follow the instructions on https://dev.min
 Run the following script in PowerShell:
 
 ```powershell
-cmake . -G"Visual Studio 15 2017 Win64" -DCMAKE_TOOLCHAIN_FILE=D:/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_GETTEXT=0 -DENABLE_CURSES=0
+cmake . -G"Visual Studio 15 2017 Win64" -DCMAKE_TOOLCHAIN_FILE=D:/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_GETTEXT=OFF -DENABLE_CURSES=OFF -DENABLE_SYSTEM_JSONCPP=ON
 cmake --build . --config Release
 ```
 Make sure that the right compiler is selected and the path to the vcpkg toolchain is correct.
