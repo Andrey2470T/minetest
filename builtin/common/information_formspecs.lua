@@ -24,7 +24,7 @@ local LIST_FORMSPEC_MODSLIST = [[
 		size[6,8]
 		label[0,-0.1;%s]
 		tablecolumns[color;tree;text]
-		table[0,0.5;6,7;modslist;%s;0]
+		table[0,0.5;5.8,7;modslist;%s;0]
 		button_exit[1.5,7.5;3,1;quit;%s]
 	]]
 
