@@ -24,12 +24,11 @@ local LIST_FORMSPEC_MODSLIST = [[
 		size[6,8]
 		label[0,-0.1;%s]
 		tablecolumns[color;tree;text]
-		table[0,0.5;5.8,7;modslist;%s;0]
+		table[0,0.5;6,7;modslist;%s;0]
 		button_exit[1.5,7.5;3,1;quit;%s]
 	]]
 
-local F = core.formspec_escape
-local S = core.get_translator("__builtin")
+local formspec_escape = core.formspec_escape
 local check_player_privs = core.check_player_privs
 
 
@@ -60,23 +59,22 @@ core.after(0, load_mod_command_tree)
 
 local function build_chatcommands_formspec(name, sel, copy)
 	local rows = {}
-	rows[1] = "#FFF,0,"..F(S("Command"))..","..F(S("Parameters"))
+	rows[1] = "#FFF,0,Command,Parameters"
 
-	local description = S("For more information, click on "
-		.. "any entry in the list.").. "\n" ..
-		S("Double-click to copy the entry to the chat history.")
+	local description = "For more information, click on any entry in the list.\n" ..
+		"Double-click to copy the entry to the chat history."
 
 	for i, data in ipairs(mod_cmds) do
-		rows[#rows + 1] = COLOR_BLUE .. ",0," .. F(data[1]) .. ","
+		rows[#rows + 1] = COLOR_BLUE .. ",0," .. formspec_escape(data[1]) .. ","
 		for j, cmds in ipairs(data[2]) do
 			local has_priv = check_player_privs(name, cmds[2].privs)
 			rows[#rows + 1] = ("%s,1,%s,%s"):format(
 				has_priv and COLOR_GREEN or COLOR_GRAY,
-				cmds[1], F(cmds[2].params))
+				cmds[1], formspec_escape(cmds[2].params))
 			if sel == #rows then
 				description = cmds[2].description
 				if copy then
-					core.chat_send_player(name, S("Command: @1 @2",
+					core.chat_send_player(name, ("Command: %s %s"):format(
 						core.colorize("#0FF", "/" .. cmds[1]), cmds[2].params))
 				end
 			end
@@ -84,9 +82,9 @@ local function build_chatcommands_formspec(name, sel, copy)
 	end
 
 	return LIST_FORMSPEC_DESCRIPTION:format(
-			F(S("Available commands: (see also: /help <cmd>)")),
+			"Available commands: (see also: /help <cmd>)",
 			table.concat(rows, ","), sel or 0,
-			F(description), F(S("Close"))
+			description, "Close"
 		)
 end
 
@@ -101,19 +99,19 @@ local function build_privs_formspec(name)
 	table.sort(privs, function(a, b) return a[1] < b[1] end)
 
 	local rows = {}
-	rows[1] = "#FFF,0,"..F(S("Privilege"))..","..F(S("Description"))
+	rows[1] = "#FFF,0,Privilege,Description"
 
 	local player_privs = core.get_player_privs(name)
 	for i, data in ipairs(privs) do
 		rows[#rows + 1] = ("%s,0,%s,%s"):format(
 			player_privs[data[1]] and COLOR_GREEN or COLOR_GRAY,
-				data[1], F(data[2].description))
+				data[1], formspec_escape(data[2].description))
 	end
 
 	return LIST_FORMSPEC:format(
-			F(S("Available privileges:")),
+			"Available privileges:",
 			table.concat(rows, ","),
-			F(S("Close"))
+			"Close"
 		)
 end
 
@@ -151,7 +149,13 @@ end
 
 -- MODS FORMSPEC
 
+local mods_formspec_cache = ""
+
 function build_mods_formspec()
+	if mods_formspec_cache:len() > 0 then
+		return mods_formspec_cache
+	end
+
 	local modslist = core.get_modnames()
 	local mps_and_smods = {}
 
@@ -191,11 +195,15 @@ function build_mods_formspec()
 		end
 	end
 
-	return LIST_FORMSPEC_MODSLIST:format(
-			"List of installed mods:",
-			table.concat(rows, ","),
-			"Close"
-		)
+	local mods_formspec_s = LIST_FORMSPEC_MODSLIST:format(
+		"List of installed mods:",
+		table.concat(rows, ","),
+		"Close"
+	)
+
+	mods_formspec_cache = mods_formspec_s
+
+	return mods_formspec_s
 end
 
 
@@ -206,7 +214,7 @@ core.register_on_player_receive_fields(function(player, formname, fields)
 		return
 	end
 
-	local event = core.explode_table_event(fields.list)
+	local event = minetest.explode_table_event(fields.list)
 	if event.type ~= "INV" then
 		local name = player:get_player_name()
 		core.show_formspec(name, "__builtin:help_cmds",
