@@ -452,4 +452,15 @@ void main(void)
 	col = vec4(col.rgb, base.a);
 
 	gl_FragData[0] = col;
+
+#if (MATERIAL_TYPE == TILE_MATERIAL_WAVING_LIQUID_TRANSPARENT || MATERIAL_TYPE == TILE_MATERIAL_WAVING_LIQUID_OPAQUE || MATERIAL_TYPE == TILE_MATERIAL_WAVING_LIQUID_BASIC || MATERIAL_TYPE == TILE_MATERIAL_LIQUID_TRANSPARENT || MATERIAL_TYPE == TILE_MATERIAL_LIQUID_OPAQUE)
+    // FIXME: Give waving things actual normals.
+    gl_FragData[1] = vec4(0.0, 1.0, 0.0, 1.0);
+#else
+    gl_FragData[1] = vec4(vNormal, base.a);
+#endif
+
+#if (DRAW_TYPE == NDT_LIQUID || DRAW_TYPE == NDT_FLOWINGLIQUID)
+    gl_FragData[2] = vec4(1.0, 0.0, 1.0, 1.0);
+#endif
 }

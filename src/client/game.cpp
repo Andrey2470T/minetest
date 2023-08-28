@@ -387,6 +387,11 @@ class GameGlobalShaderConstantSetter : public IShaderConstantSetter
 	CachedPixelShaderSetting<float, 3> m_minimap_yaw;
 	CachedPixelShaderSetting<float, 3> m_camera_offset_pixel;
 	CachedPixelShaderSetting<float, 3> m_camera_offset_vertex;
+	CachedPixelShaderSetting<float, 3> m_camera_position_pixel;
+	CachedPixelShaderSetting<float, 16> m_camera_view_pixel;
+	CachedPixelShaderSetting<float, 16> m_camera_viewinv_pixel;
+	CachedPixelShaderSetting<float, 16> m_camera_viewproj_pixel;
+	CachedPixelShaderSetting<float, 16> m_camera_viewprojinv_pixel;
 	CachedPixelShaderSetting<SamplerLayer_t> m_texture0;
 	CachedPixelShaderSetting<SamplerLayer_t> m_texture1;
 	CachedPixelShaderSetting<SamplerLayer_t> m_texture2;
@@ -453,6 +458,11 @@ public:
 		m_minimap_yaw("yawVec"),
 		m_camera_offset_pixel("cameraOffset"),
 		m_camera_offset_vertex("cameraOffset"),
+		m_camera_position_pixel("cameraPosition"),
+        m_camera_view_pixel("mCameraView"),
+        m_camera_viewinv_pixel("mCameraViewInv"),
+        m_camera_viewproj_pixel("mCameraViewProj"),
+        m_camera_viewprojinv_pixel("mCameraViewProjInv"),
 		m_texture0("texture0"),
 		m_texture1("texture1"),
 		m_texture2("texture2"),
@@ -558,6 +568,28 @@ public:
 		offset.getAs3Values(camera_offset_array);
 		m_camera_offset_pixel.set(camera_offset_array, services);
 		m_camera_offset_vertex.set(camera_offset_array, services);
+
+		v3f camera_position_vector = m_client->getCamera()->getPosition();
+		float camera_position[3] = {
+				camera_position_vector.X,
+				camera_position_vector.Y,
+				camera_position_vector.Z
+		};
+		m_camera_position_pixel.set(camera_position, services);
+
+        core::matrix4 camera_view = m_client->getCamera()->getCameraNode()->getViewMatrix();
+        m_camera_view_pixel.set(camera_view.pointer(), services);
+
+        core::matrix4 camera_viewinv;
+		camera_view.getInverse(camera_viewinv);
+        m_camera_viewinv_pixel.set(camera_viewinv.pointer(), services);
+
+        core::matrix4 camera_viewproj = m_client->getCamera()->getCameraNode()->getProjectionMatrix();
+		m_camera_viewproj_pixel.set(camera_viewproj.pointer(), services);
+
+		core::matrix4 camera_viewprojinv;
+		camera_viewproj.getInverse(camera_viewprojinv);
+		m_camera_viewprojinv_pixel.set(camera_viewprojinv.pointer(), services);
 
 		SamplerLayer_t tex_id;
 		tex_id = 0;

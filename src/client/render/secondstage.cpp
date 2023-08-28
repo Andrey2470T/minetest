@@ -123,6 +123,9 @@ RenderStep *addPostProcessing(RenderPipeline *pipeline, RenderStep *previousStep
 	static const u8 TEXTURE_VOLUME = 6;
 	static const u8 TEXTURE_SCALE_DOWN = 10;
 	static const u8 TEXTURE_SCALE_UP = 20;
+	static const u8 TEXTURE_NORMAL = 30;
+    static const u8 TEXTURE_REFLECTION_MASK = 31;
+    static const u8 TEXTURE_REFLECTION = 32;
 
 	// Super-sampling is simply rendering into a larger texture.
 	// Downscaling is done by the final step when rendering to the screen.
@@ -132,6 +135,7 @@ RenderStep *addPostProcessing(RenderPipeline *pipeline, RenderStep *previousStep
 	const bool enable_ssaa = antialiasing == "ssaa";
 	const bool enable_fxaa = antialiasing == "fxaa";
 	const bool enable_volumetric_light = g_settings->getBool("enable_volumetric_lighting") && enable_bloom;
+	const bool enable_liquid_reflections = true;
 
 	if (enable_ssaa) {
 		u16 ssaa_scale = MYMAX(2, g_settings->getU16("fsaa"));
@@ -144,7 +148,7 @@ RenderStep *addPostProcessing(RenderPipeline *pipeline, RenderStep *previousStep
 	buffer->setTexture(TEXTURE_DEPTH, scale, "3d_depthmap", depth_format);
 
 	// attach buffer to the previous step
-	previousStep->setRenderTarget(pipeline->createOwned<TextureBufferOutput>(buffer, std::vector<u8> { TEXTURE_COLOR }, TEXTURE_DEPTH));
+	previousStep->setRenderTarget(pipeline->createOwned<TextureBufferOutput>(buffer, std::vector<u8> { TEXTURE_COLOR, TEXTURE_NORMAL, TEXTURE_REFLECTION_MASK }, TEXTURE_DEPTH));
 
 	// shared variables
 	u32 shader_id;
@@ -226,12 +230,26 @@ RenderStep *addPostProcessing(RenderPipeline *pipeline, RenderStep *previousStep
 	// FXAA
 	u8 final_stage_source = TEXTURE_COLOR;
 
+	// Liquid reflections
+	if (enable_liquid_reflections) {
+        buffer->setTexture(TEXTURE_NORMAL, scale, "3d_normalmap", color_format);
+        buffer->setTexture(TEXTURE_REFLECTION_MASK, scale, "reflection_mask", color_format);
+        buffer->setTexture(TEXTURE_REFLECTION, scale, "reflection_mask", color_format);
+
+        u32 shader_id = client->getShaderSource()->getShader("water_reflection", TILE_MATERIAL_PLAIN, NDT_MESH);
+        RenderStep *water_reflection = pipeline->addStep<PostProcessingStep>(shader_id, std::vector<u8> { final_stage_source, TEXTURE_DEPTH, TEXTURE_NORMAL, TEXTURE_REFLECTION_MASK });
+        water_reflection->setRenderSource(buffer);
+        water_reflection->setRenderTarget(pipeline->createOwned<TextureBufferOutput>(buffer, TEXTURE_REFLECTION));
+
+        final_stage_source = TEXTURE_REFLECTION;
+    }
+
 	if (enable_fxaa) {
 		final_stage_source = TEXTURE_FXAA;
 
 		buffer->setTexture(TEXTURE_FXAA, scale, "fxaa", color_format);
 		shader_id = client->getShaderSource()->getShader("fxaa", TILE_MATERIAL_PLAIN);
-		PostProcessingStep *effect = pipeline->createOwned<PostProcessingStep>(shader_id, std::vector<u8> { TEXTURE_COLOR });
+		PostProcessingStep *effect = pipeline->createOwned<PostProcessingStep>(shader_id, std::vector<u8> { final_stage_source });
 		pipeline->addStep(effect);
 		effect->setBilinearFilter(0, true);
 		effect->setRenderSource(buffer);
