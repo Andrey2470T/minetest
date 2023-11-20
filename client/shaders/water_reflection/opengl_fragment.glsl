@@ -141,12 +141,12 @@ void main(void) {
         normal.z += ((wave_noise - 0.5) * _WaveHeight) + ((ripple_noise - 0.5) * _RippleHeight);
 
         // Reflection color
-        vec3 camera_dir = normalize(position);
-        vec3 direction = reflect(camera_dir, normal);
+        vec3 dir_to_pos = normalize(position);
+        vec3 direction = reflect(dir_to_pos, normal);
         vec4 reflect_color = raycast(position, direction, _MaxDistance, skyBgColor);
 
         // Fresnel
-        float factor = dot(-camera_dir, normal);
+        float factor = dot(-dir_to_pos, normal);
         factor = pow(factor, _ReflectFactor);
 
         gl_FragColor = mix(reflect_color, base_color, factor);

@@ -713,7 +713,7 @@ void MapblockMeshGenerator::drawLiquidSides()
 			if (data->m_smooth_lighting)
 				cur_node.color = blendLightColor(pos);
 			pos += cur_node.origin;
-			vertices[j] = video::S3DVertex(pos.X, pos.Y, pos.Z, 0, 0, 0, cur_node.color, vertex.u, v);
+			vertices[j] = video::S3DVertex(pos.X, pos.Y, pos.Z, face.dir.X, face.dir.Y, face.dir.Z, cur_node.color, vertex.u, v);
 		};
 		collector->append(cur_liquid.tile, vertices, 4, quad_indices, 6);
 	}
@@ -727,10 +727,10 @@ void MapblockMeshGenerator::drawLiquidTop()
 	static const int corner_resolve[4][2] = {{0, 1}, {1, 1}, {1, 0}, {0, 0}};
 
 	video::S3DVertex vertices[4] = {
-		video::S3DVertex(-BS / 2, 0,  BS / 2, 0, 0, 0, cur_liquid.color_top, 0, 1),
-		video::S3DVertex( BS / 2, 0,  BS / 2, 0, 0, 0, cur_liquid.color_top, 1, 1),
-		video::S3DVertex( BS / 2, 0, -BS / 2, 0, 0, 0, cur_liquid.color_top, 1, 0),
-		video::S3DVertex(-BS / 2, 0, -BS / 2, 0, 0, 0, cur_liquid.color_top, 0, 0),
+		video::S3DVertex(-BS / 2, 0,  BS / 2, 0, 1, 0, cur_liquid.color_top, 0, 1),
+		video::S3DVertex( BS / 2, 0,  BS / 2, 0, 1, 0, cur_liquid.color_top, 1, 1),
+		video::S3DVertex( BS / 2, 0, -BS / 2, 0, 1, 0, cur_liquid.color_top, 1, 0),
+		video::S3DVertex(-BS / 2, 0, -BS / 2, 0, 1, 0, cur_liquid.color_top, 0, 0),
 	};
 
 	for (int i = 0; i < 4; i++) {
@@ -785,10 +785,10 @@ void MapblockMeshGenerator::drawLiquidTop()
 void MapblockMeshGenerator::drawLiquidBottom()
 {
 	video::S3DVertex vertices[4] = {
-		video::S3DVertex(-BS / 2, -BS / 2, -BS / 2, 0, 0, 0, cur_liquid.color_top, 0, 0),
-		video::S3DVertex( BS / 2, -BS / 2, -BS / 2, 0, 0, 0, cur_liquid.color_top, 1, 0),
-		video::S3DVertex( BS / 2, -BS / 2,  BS / 2, 0, 0, 0, cur_liquid.color_top, 1, 1),
-		video::S3DVertex(-BS / 2, -BS / 2,  BS / 2, 0, 0, 0, cur_liquid.color_top, 0, 1),
+		video::S3DVertex(-BS / 2, -BS / 2, -BS / 2, 0, -1, 0, cur_liquid.color_top, 0, 0),
+		video::S3DVertex( BS / 2, -BS / 2, -BS / 2, 0, -1, 0, cur_liquid.color_top, 1, 0),
+		video::S3DVertex( BS / 2, -BS / 2,  BS / 2, 0, -1, 0, cur_liquid.color_top, 1, 1),
+		video::S3DVertex(-BS / 2, -BS / 2,  BS / 2, 0, -1, 0, cur_liquid.color_top, 0, 1),
 	};
 
 	for (int i = 0; i < 4; i++) {
