@@ -632,6 +632,11 @@ bloom_radius (Bloom Radius) float 1 0.1 8
 #    Requires: shaders, enable_bloom
 enable_volumetric_lighting (Volumetric lighting) bool false
 
+[**Liquid Reflections]
+
+#    Set to true to render liquid reflections.
+enable_liquid_reflections (Enable Liquid Reflections) bool false
+
 [*Audio]
 
 #    Volume of all sounds.
