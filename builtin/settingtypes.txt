@@ -635,6 +635,8 @@ enable_volumetric_lighting (Volumetric lighting) bool false
 [**Liquid Reflections]
 
 #    Set to true to render liquid reflections.
+#
+#    Requires: shaders
 enable_liquid_reflections (Enable Liquid Reflections) bool false
 
 [*Audio]

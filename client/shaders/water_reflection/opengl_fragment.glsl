@@ -73,10 +73,41 @@ float snoise(vec3 p)
 }
 
 const float _MaxDistance = 100000.0;
-const float _Step = 0.05;
+const float _Step = 0.1;
 const float _Thickness = 0.05;
+const int _IterationCount = 100;
+const float _DistanceBias = 0.05;
 
-vec4 raycast(vec3 position, vec3 direction, float limit, vec4 fallback) {
+vec4 raycast(vec3 position, vec3 direction, vec4 fallback) {
+	vec3 step_v = direction * _Step;
+	float start_depth = texture2D(depthmap, uv).x;
+	vec3 march_position = position + step_v;
+
+	vec2 cur_uv;
+	float screen_depth;
+	float delta;
+
+	for (int i = 0; i < _IterationCount; i++) {
+		cur_uv = projectPos(march_position);
+
+		if (cur_uv.x > 1 || cur_uv.x < 0 || cur_uv.y > 1 || cur_uv.y < 0) {
+            break;
+        }
+
+		screen_depth = worldPos(cur_uv).z;
+
+		if (texture2D(depthmap, cur_uv).x > start_depth && march_position.z / screen_depth > 1.01) {
+			return texture2D(rendered, cur_uv);
+		}
+
+		march_position += step_v;
+		step_v *= 1.1;
+	}
+
+	return fallback;
+}
+
+/*vec4 raycast(vec3 position, vec3 direction, float limit, vec4 fallback) {
     float ray_length = length(position) * 0.05;
     float start_depth = texture2D(depthmap, uv).x;
     // float ray_length = _Step;
@@ -110,7 +141,7 @@ vec4 raycast(vec3 position, vec3 direction, float limit, vec4 fallback) {
     }
 
     return fallback;
-}
+}*/
 
 const float _WindSpeed = 100.0;
 const vec3 _WindDir = normalize(vec3(1.0, 0.0, 1.0));
@@ -143,7 +174,7 @@ void main(void) {
         // Reflection color
         vec3 dir_to_pos = normalize(position);
         vec3 direction = reflect(dir_to_pos, normal);
-        vec4 reflect_color = raycast(position, direction, _MaxDistance, skyBgColor);
+        vec4 reflect_color = raycast(position, direction, skyBgColor);
 
         // Fresnel
         float factor = dot(-dir_to_pos, normal);
