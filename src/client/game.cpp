@@ -387,6 +387,8 @@ class GameGlobalShaderConstantSetter : public IShaderConstantSetter
 	CachedPixelShaderSetting<float, 3> m_minimap_yaw;
 	CachedPixelShaderSetting<float, 3> m_camera_offset_pixel;
 	CachedPixelShaderSetting<float, 3> m_camera_offset_vertex;
+	CachedPixelShaderSetting<float, 3> m_sky_body_min_edge_pixel;
+	CachedPixelShaderSetting<float, 3> m_sky_body_max_edge_pixel;
 	CachedPixelShaderSetting<float, 3> m_camera_position_pixel;
 	CachedPixelShaderSetting<float, 16> m_camera_view_pixel;
 	CachedPixelShaderSetting<float, 16> m_camera_viewinv_pixel;
@@ -458,6 +460,8 @@ public:
 		m_minimap_yaw("yawVec"),
 		m_camera_offset_pixel("cameraOffset"),
 		m_camera_offset_vertex("cameraOffset"),
+		m_sky_body_min_edge_pixel("skyBodyMinEdge"),
+		m_sky_body_max_edge_pixel("skyBodyMaxEdge"),
 		m_camera_position_pixel("cameraPosition"),
         m_camera_view_pixel("mCameraView"),
         m_camera_viewinv_pixel("mCameraViewInv"),
@@ -569,12 +573,41 @@ public:
 		m_camera_offset_pixel.set(camera_offset_array, services);
 		m_camera_offset_vertex.set(camera_offset_array, services);
 
+		auto sky_body_box = m_sky->getCurRenderedSkyBodyFlatBox();
+
+		float sky_body_min_edge[3];
+
+		sky_body_box.MinEdge.getAs3Values(sky_body_min_edge);
+		m_sky_body_min_edge_pixel.set(sky_body_min_edge, services);
+
+		float sky_body_max_edge[3];
+
+		sky_body_box.MaxEdge.getAs3Values(sky_body_max_edge);
+		m_sky_body_max_edge_pixel.set(sky_body_max_edge, services);
+
+		/*float timeofday = m_client->getEnv().getTimeOfDayF();
+		bool is_day = timeofday > 0.25 && timeofday < 0.75;
+
+		float light_direction[3];
+
+		if (is_day) {
+			if (m_sky->getSunVisible())
+				m_sky->getSunDirection().getAs3Values(light_direction);
+		}
+		else {
+			if (m_sky->getMoonVisible())
+				m_sky->getMoonDirection().getAs3Values(light_direction);
+		}
+
+		m_light_direction_pixel.set(light_direction, services);*/
+
 		v3f camera_position_vector = m_client->getCamera()->getPosition();
 		float camera_position[3] = {
 				camera_position_vector.X,
 				camera_position_vector.Y,
 				camera_position_vector.Z
 		};
+		//infostream << "light_direction: X: " << light_direction[0] << ", Y: " << light_direction[1] << ", Z: " << light_direction[2] << std::endl;
 		m_camera_position_pixel.set(camera_position, services);
 
         core::matrix4 camera_view = m_client->getCamera()->getCameraNode()->getViewMatrix();

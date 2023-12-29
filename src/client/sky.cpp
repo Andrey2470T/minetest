@@ -611,6 +611,11 @@ void Sky::draw_sun(video::IVideoDriver *driver, const video::SColor &suncolor,
 		place_sky_body(vertices, 90, wicked_time_of_day * 360 - 90);
 		driver->drawIndexedTriangleList(&vertices[0], 4, indices, 2);
 	}
+
+	m_cur_rendered_sky_body_flat_box.MinEdge = vertices[0].Pos;
+	m_cur_rendered_sky_body_flat_box.MaxEdge = vertices[2].Pos;
+
+	m_cur_rendered_sky_body_flat_box.repair();
 }
 
 
@@ -668,6 +673,11 @@ void Sky::draw_moon(video::IVideoDriver *driver, const video::SColor &mooncolor,
 		place_sky_body(vertices, -90, wicked_time_of_day * 360 - 90);
 		driver->drawIndexedTriangleList(&vertices[0], 4, indices, 2);
 	}
+
+	m_cur_rendered_sky_body_flat_box.MinEdge = vertices[0].Pos;
+	m_cur_rendered_sky_body_flat_box.MaxEdge = vertices[2].Pos;
+
+	m_cur_rendered_sky_body_flat_box.repair();
 }
 
 void Sky::draw_stars(video::IVideoDriver * driver, float wicked_time_of_day)

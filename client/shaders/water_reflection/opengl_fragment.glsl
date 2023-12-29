@@ -17,6 +17,8 @@ uniform mat4 mCameraViewInv;
 uniform mat4 mCameraViewProj;
 uniform mat4 mCameraViewProjInv;
 
+uniform vec3 skyBodyMinEdge;
+uniform vec3 skyBodyMaxEdge;
 uniform vec3 cameraPosition;
 uniform vec3 cameraOffset;
 
@@ -37,9 +39,22 @@ vec2 projectPos(vec3 pos) {
     return (projected.xy / projected.w) * 0.5 + 0.5;
 }
 
-vec3 worldPos(vec2 pos) {
+vec3 viewPos(vec2 pos) {
     vec4 position = mCameraViewProjInv * vec4((pos - 0.5) * 2.0, texture2D(depthmap, pos).x, 1.0);
     return position.xyz / position.w;
+}
+
+vec3 worldPos(vec2 pos) {
+    vec4 position = mCameraViewInv * mCameraViewProjInv * vec4((pos - 0.5) * 2.0, texture2D(depthmap, pos).x, 1.0);
+    return position.xyz / position.w;
+}
+
+bool isSkyBodyFrag(vec2 pos) {
+	vec2 min_edge_uv = projectPos(skyBodyMinEdge);
+	vec2 max_edge_uv = projectPos(skyBodyMaxEdge);
+
+	return (max_edge_uv.x <= pos.x && pos.x <= min_edge_uv.x) &&
+		(max_edge_uv.y <= pos.y && pos.y <= min_edge_uv.y);
 }
 
 // Permute
@@ -94,7 +109,13 @@ vec4 raycast(vec3 position, vec3 direction, vec4 fallback) {
             break;
         }
 
-		screen_depth = worldPos(cur_uv).z;
+		screen_depth = viewPos(cur_uv).z;
+
+		if (texture2D(depthmap, cur_uv).x == 1.0) {
+			if (isSkyBodyFrag(cur_uv)) {
+				return texture2D(rendered, cur_uv);
+			}
+		}
 
 		if (texture2D(depthmap, cur_uv).x > start_depth && march_position.z / screen_depth > 1.01) {
 			return texture2D(rendered, cur_uv);
@@ -160,7 +181,7 @@ void main(void) {
 
     // if (mask == vec4(1.0)) { // This somehow catches the sun color ........... somehow
     if (mask == vec4(1.0, 0.0, 1.0, 1.0)) {
-        vec3 position = worldPos(uv);
+        vec3 position = viewPos(uv);
         vec3 normal = normalize(mat3(mCameraView) * texture2D(normalmap, uv).xyz);
 
         // Waves and ripples
