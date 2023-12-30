@@ -20,6 +20,7 @@ uniform mat4 mCameraViewProjInv;
 uniform vec3 cameraPosition;
 uniform vec3 cameraOffset;
 
+uniform int isCameraInsideNode;
 uniform float animationTimer;
 
 #ifdef GL_ES
@@ -165,7 +166,7 @@ void main(void) {
     vec4 base_color = texture2D(rendered, uv);
 
     // if (mask == vec4(1.0)) { // This somehow catches the sun color ........... somehow
-    if (mask == vec4(1.0, 0.0, 1.0, 1.0)) {
+    if (mask == vec4(1.0, 0.0, 1.0, 1.0) && isCameraInsideNode == 0) {
         vec3 position = viewPos(uv);
         vec3 normal = normalize(mat3(mCameraView) * texture2D(normalmap, uv).xyz);
 

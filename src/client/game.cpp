@@ -388,6 +388,7 @@ class GameGlobalShaderConstantSetter : public IShaderConstantSetter
 	CachedPixelShaderSetting<float, 3> m_camera_offset_pixel;
 	CachedPixelShaderSetting<float, 3> m_camera_offset_vertex;
 	CachedPixelShaderSetting<float, 3> m_camera_position_pixel;
+	CachedPixelShaderSetting<int> m_is_camera_inside_node;
 	CachedPixelShaderSetting<float, 16> m_camera_view_pixel;
 	CachedPixelShaderSetting<float, 16> m_camera_viewinv_pixel;
 	CachedPixelShaderSetting<float, 16> m_camera_viewproj_pixel;
@@ -459,6 +460,7 @@ public:
 		m_camera_offset_pixel("cameraOffset"),
 		m_camera_offset_vertex("cameraOffset"),
 		m_camera_position_pixel("cameraPosition"),
+		m_is_camera_inside_node("isCameraInsideNode"),
         m_camera_view_pixel("mCameraView"),
         m_camera_viewinv_pixel("mCameraViewInv"),
         m_camera_viewproj_pixel("mCameraViewProj"),
@@ -587,13 +589,17 @@ public:
 		m_light_direction_pixel.set(light_direction, services);*/
 
 		v3f camera_position_vector = m_client->getCamera()->getPosition();
-		float camera_position[3] = {
-				camera_position_vector.X,
-				camera_position_vector.Y,
-				camera_position_vector.Z
-		};
-		//infostream << "light_direction: X: " << light_direction[0] << ", Y: " << light_direction[1] << ", Z: " << light_direction[2] << std::endl;
+
+		float camera_position[3];
+		camera_position_vector.getAs3Values(camera_position);
+
 		m_camera_position_pixel.set(camera_position, services);
+
+		MapNode n = m_client->getEnv().getClientMap().getNode(floatToInt(camera_position_vector, BS));
+
+		int is_camera_inside_node = int(n.getContent() != CONTENT_AIR);
+
+		m_is_camera_inside_node.set(&is_camera_inside_node, services);
 
         core::matrix4 camera_view = m_client->getCamera()->getCameraNode()->getViewMatrix();
         m_camera_view_pixel.set(camera_view.pointer(), services);
