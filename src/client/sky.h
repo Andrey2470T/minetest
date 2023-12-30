@@ -123,8 +123,6 @@ public:
 	void setVolumetricLightStrength(float volumetric_light_strength) { m_sky_params.volumetric_light_strength = volumetric_light_strength; }
 	float getVolumetricLightStrength() const { return m_sky_params.volumetric_light_strength; }
 
-	core::aabbox3df getCurRenderedSkyBodyFlatBox() const { return m_cur_rendered_sky_body_flat_box; }
-
 private:
 	aabb3f m_box;
 	video::SMaterial m_materials[SKY_MATERIAL_COUNT];
@@ -211,8 +209,6 @@ private:
 	video::ITexture *m_moon_texture;
 	video::ITexture *m_sun_tonemap;
 	video::ITexture *m_moon_tonemap;
-
-	core::aabbox3df m_cur_rendered_sky_body_flat_box;
 
 	void updateStars();
 

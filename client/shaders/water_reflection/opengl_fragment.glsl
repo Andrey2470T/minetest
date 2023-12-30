@@ -17,8 +17,6 @@ uniform mat4 mCameraViewInv;
 uniform mat4 mCameraViewProj;
 uniform mat4 mCameraViewProjInv;
 
-uniform vec3 skyBodyMinEdge;
-uniform vec3 skyBodyMaxEdge;
 uniform vec3 cameraPosition;
 uniform vec3 cameraOffset;
 
@@ -49,13 +47,6 @@ vec3 worldPos(vec2 pos) {
     return position.xyz / position.w;
 }
 
-bool isSkyBodyFrag(vec2 pos) {
-	vec2 min_edge_uv = projectPos(skyBodyMinEdge);
-	vec2 max_edge_uv = projectPos(skyBodyMaxEdge);
-
-	return (max_edge_uv.x <= pos.x && pos.x <= min_edge_uv.x) &&
-		(max_edge_uv.y <= pos.y && pos.y <= min_edge_uv.y);
-}
 
 // Permute
 vec4 perm(vec4 x)
@@ -90,7 +81,7 @@ float snoise(vec3 p)
 const float _MaxDistance = 100000.0;
 const float _Step = 0.1;
 const float _Thickness = 0.05;
-const int _IterationCount = 100;
+const int _IterationCount = 1000;
 const float _DistanceBias = 0.05;
 
 vec4 raycast(vec3 position, vec3 direction, vec4 fallback) {
@@ -110,12 +101,6 @@ vec4 raycast(vec3 position, vec3 direction, vec4 fallback) {
         }
 
 		screen_depth = viewPos(cur_uv).z;
-
-		if (texture2D(depthmap, cur_uv).x == 1.0) {
-			if (isSkyBodyFrag(cur_uv)) {
-				return texture2D(rendered, cur_uv);
-			}
-		}
 
 		if (texture2D(depthmap, cur_uv).x > start_depth && march_position.z / screen_depth > 1.01) {
 			return texture2D(rendered, cur_uv);
