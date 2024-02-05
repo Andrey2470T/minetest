@@ -42,6 +42,7 @@ struct LightInfo {
 	float light_day;
 	float light_night;
 	float light_boosted;
+	video::SColor light_color(0, 0, 0, 0);
 
 	LightPair getPair(float sunlight_boost = 0.0) const
 	{
@@ -56,6 +57,7 @@ struct LightFrame {
 	f32 lightsDay[8];
 	f32 lightsNight[8];
 	bool sunlight[8];
+	video::SColor lightsColors[8];
 };
 
 class MapblockMeshGenerator

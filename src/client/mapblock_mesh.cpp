@@ -145,7 +145,7 @@ u16 getFaceLight(MapNode n, MapNode n2, const NodeDefManager *ndef)
 	Both light banks
 */
 static u16 getSmoothLightCombined(const v3s16 &p,
-	const std::array<v3s16,8> &dirs, MeshMakeData *data)
+	const std::array<v3s16,8> &dirs, MeshMakeData *data, video::SColor &res_light_color)
 {
 	const NodeDefManager *ndef = data->m_client->ndef();
 
@@ -167,6 +167,11 @@ static u16 getSmoothLightCombined(const v3s16 &p,
 		const ContentFeatures &f = ndef->get(n);
 		if (f.light_source > light_source_max)
 			light_source_max = f.light_source;
+
+		// Adds the color of the emitting light of the node with the current color
+		f32 light_source_f = f.light_source / 15.f;		// range [0, 1]
+		res_light_color += light_source_f * f.light_color;
+
 		// Check f.solidness because fast-style leaves look better this way
 		if (f.param_type == CPT_LIGHT && f.solidness != 2) {
 			u8 light_level_day = n.getLight(LIGHTBANK_DAY, f.getLightingFlags());
@@ -253,9 +258,9 @@ static u16 getSmoothLightCombined(const v3s16 &p,
 	Both light banks.
 	Node at p is solid, and thus the lighting is face-dependent.
 */
-u16 getSmoothLightSolid(const v3s16 &p, const v3s16 &face_dir, const v3s16 &corner, MeshMakeData *data)
+u16 getSmoothLightSolid(const v3s16 &p, const v3s16 &face_dir, const v3s16 &corner, MeshMakeData *data, video::SColor &light_color)
 {
-	return getSmoothLightTransparent(p + face_dir, corner - 2 * face_dir, data);
+	return getSmoothLightTransparent(p + face_dir, corner - 2 * face_dir, data, light_color);
 }
 
 /*
@@ -263,7 +268,7 @@ u16 getSmoothLightSolid(const v3s16 &p, const v3s16 &face_dir, const v3s16 &corn
 	Both light banks.
 	Node at p is not solid, and the lighting is not face-dependent.
 */
-u16 getSmoothLightTransparent(const v3s16 &p, const v3s16 &corner, MeshMakeData *data)
+u16 getSmoothLightTransparent(const v3s16 &p, const v3s16 &corner, MeshMakeData *data, video::SColor &light_color)
 {
 	const std::array<v3s16,8> dirs = {{
 		// Always shine light
@@ -278,7 +283,7 @@ u16 getSmoothLightTransparent(const v3s16 &p, const v3s16 &corner, MeshMakeData 
 		v3s16(0,corner.Y,corner.Z),
 		v3s16(corner.X,corner.Y,corner.Z)
 	}};
-	return getSmoothLightCombined(p, dirs, data);
+	return getSmoothLightCombined(p, dirs, data, light_color);
 }
 
 void get_sunlight_color(video::SColorf *sunlight, u32 daynight_ratio){
@@ -978,7 +983,7 @@ void MapBlockMesh::consolidateTransparentBuffers()
 	}
 }
 
-video::SColor encode_light(u16 light, u8 emissive_light)
+video::SColor encode_light(u16 light, u8 emissive_light, video::SColor light_color)
 {
 	// Get components
 	u32 day = (light & 0xff);
@@ -1003,7 +1008,14 @@ video::SColor encode_light(u16 light, u8 emissive_light)
 		r = 0;
 	// Average light:
 	float b = (day + night) / 2;
-	return video::SColor(r, b, b, b);
+
+	video::SColor res_color(
+		r + light_color.getRed(),
+		b + light_color.getGreen(),
+		b + light_color.getBlue(),
+		b);
+
+	return res_color;
 }
 
 u8 get_solid_sides(MeshMakeData *data)
