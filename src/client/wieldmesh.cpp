@@ -733,6 +733,64 @@ scene::SMesh *getExtrudedMesh(ITextureSource *tsrc,
 	return mesh;
 }
 
+void WieldMeshSceneNode::setExtruded(const std::string &imagename,
+	const std::string &overlay_name, v3f wield_scale, ITextureSource *tsrc,
+	u8 num_frames)
+{
+	video::ITexture *texture = tsrc->getTexture(imagename);
+	if (!texture) {
+		changeToMesh(nullptr);
+		return;
+	}
+	video::ITexture *overlay_texture =
+		overlay_name.empty() ? NULL : tsrc->getTexture(overlay_name);
+
+	core::dimension2d<u32> dim = texture->getSize();
+	// Detect animation texture and pull off top frame instead of using entire thing
+	if (num_frames > 1) {
+		u32 frame_height = dim.Height / num_frames;
+		dim = core::dimension2d<u32>(dim.Width, frame_height);
+	}
+	scene::IMesh *original = g_extrusion_mesh_cache->create(dim);
+	scene::SMesh *mesh = cloneMesh(original);
+	original->drop();
+	//set texture
+	mesh->getMeshBuffer(0)->getMaterial().setTexture(0,
+		tsrc->getTexture(imagename));
+	if (overlay_texture) {
+		scene::IMeshBuffer *copy = cloneMeshBuffer(mesh->getMeshBuffer(0));
+		copy->getMaterial().setTexture(0, overlay_texture);
+		mesh->addMeshBuffer(copy);
+		copy->drop();
+	}
+	changeToMesh(mesh);
+	mesh->drop();
+
+	m_meshnode->setScale(wield_scale * WIELD_SCALE_FACTOR_EXTRUDED);
+
+	// Customize materials
+	for (u32 layer = 0; layer < m_meshnode->getMaterialCount(); layer++) {
+		video::SMaterial &material = m_meshnode->getMaterial(layer);
+		material.TextureLayers[0].TextureWrapU = video::ETC_CLAMP_TO_EDGE;
+		material.TextureLayers[0].TextureWrapV = video::ETC_CLAMP_TO_EDGE;
+		material.MaterialType = m_material_type;
+		material.MaterialTypeParam = 0.5f;
+		material.BackfaceCulling = true;
+		// Enable bi/trilinear filtering only for high resolution textures
+		bool bilinear_filter = dim.Width > 32 && m_bilinear_filter;
+		bool trilinear_filter = dim.Width > 32 && m_trilinear_filter;
+		material.forEachTexture([=] (auto &tex) {
+			setMaterialFilters(tex, bilinear_filter, trilinear_filter,
+					m_anisotropic_filter);
+		});
+		// mipmaps cause "thin black line" artifacts
+		material.UseMipMaps = false;
+		if (m_enable_shaders) {
+			material.setTexture(2, tsrc->getShaderFlagsTexture(false));
+		}
+	}
+}
+
 void postProcessNodeMesh(scene::SMesh *mesh, const ContentFeatures &f,
 	bool use_shaders, bool set_material, const video::E_MATERIAL_TYPE *mattype,
 	std::vector<ItemPartColor> *colors, bool apply_scale)

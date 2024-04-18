@@ -28,7 +28,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/renderingengine.h"
 #include "client/content_cao.h"
 #include "settings.h"
-#include "wieldmesh.h"
 #include "noise.h"         // easeCurve
 #include "mtevent.h"
 #include "nodedef.h"
@@ -40,15 +39,12 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <SViewFrustum.h>
 
 #define CAMERA_OFFSET_STEP 200
-#define WIELDMESH_OFFSET_X 55.0f
-#define WIELDMESH_OFFSET_Y -35.0f
 #define WIELDMESH_AMPLITUDE_X 7.0f
 #define WIELDMESH_AMPLITUDE_Y 10.0f
 
 Camera::Camera(MapDrawControl &draw_control, Client *client, RenderingEngine *rendering_engine):
 	m_draw_control(draw_control),
-	m_client(client),
-	m_player_light_color(0xFFFFFFFF)
+	m_client(client)
 {
 	auto smgr = rendering_engine->get_scene_manager();
 	// note: making the camera node a child of the player node
@@ -57,14 +53,6 @@ Camera::Camera(MapDrawControl &draw_control, Client *client, RenderingEngine *re
 	m_headnode = smgr->addEmptySceneNode(m_playernode);
 	m_cameranode = smgr->addCameraSceneNode(smgr->getRootSceneNode());
 	m_cameranode->bindTargetAndRotation(true);
-
-	// This needs to be in its own scene manager. It is drawn after
-	// all other 3D scene nodes and before the GUI.
-	m_wieldmgr = smgr->createNewSceneManager();
-	m_wieldmgr->addCameraSceneNode();
-	m_wieldnode = new WieldMeshSceneNode(m_wieldmgr, -1, false);
-	m_wieldnode->setItem(ItemStack(), m_client);
-	m_wieldnode->drop(); // m_wieldmgr grabbed it
 
 	/* TODO: Add a callback function so these can be updated when a setting
 	 *       changes.  At this point in time it doesn't matter (e.g. /set
@@ -80,14 +68,8 @@ Camera::Camera(MapDrawControl &draw_control, Client *client, RenderingEngine *re
 	// 45 degrees is the lowest FOV that doesn't cause the server to treat this
 	// as a zoom FOV and load world beyond the set server limits.
 	m_cache_fov                 = g_settings->getFloat("fov", 45.0f, 160.0f);
-	m_arm_inertia               = g_settings->getBool("arm_inertia");
 	m_nametags.clear();
 	m_show_nametag_backgrounds  = g_settings->getBool("show_nametag_backgrounds");
-}
-
-Camera::~Camera()
-{
-	m_wieldmgr->drop();
 }
 
 void Camera::notifyFovChange()
@@ -134,14 +116,6 @@ void Camera::step(f32 dtime)
 			m_view_bobbing_fall = -1; // Mark the effect as finished
 	}
 
-	bool was_under_zero = m_wield_change_timer < 0;
-	m_wield_change_timer = MYMIN(m_wield_change_timer + dtime, 0.125);
-
-	if (m_wield_change_timer >= 0 && was_under_zero) {
-		m_wieldnode->setItem(m_wield_item_next, m_client);
-		m_wieldnode->setNodeLightColor(m_player_light_color);
-	}
-
 	if (m_view_bobbing_state != 0)
 	{
 		//f32 offset = dtime * m_view_bobbing_speed * 0.035;
@@ -178,119 +152,6 @@ void Camera::step(f32 dtime)
 				m_client->getEventManager()->put(new SimpleTriggerEvent(MtEvent::VIEW_BOBBING_STEP));
 			}
 		}
-	}
-
-	if (m_digging_button != -1) {
-		f32 offset = dtime * 3.5f;
-		float m_digging_anim_was = m_digging_anim;
-		m_digging_anim += offset;
-		if (m_digging_anim >= 1)
-		{
-			m_digging_anim = 0;
-			m_digging_button = -1;
-		}
-		float lim = 0.15;
-		if(m_digging_anim_was < lim && m_digging_anim >= lim)
-		{
-			if (m_digging_button == 0) {
-				m_client->getEventManager()->put(new SimpleTriggerEvent(MtEvent::CAMERA_PUNCH_LEFT));
-			} else if(m_digging_button == 1) {
-				m_client->getEventManager()->put(new SimpleTriggerEvent(MtEvent::CAMERA_PUNCH_RIGHT));
-			}
-		}
-	}
-}
-
-static inline v2f dir(const v2f &pos_dist)
-{
-	f32 x = pos_dist.X - WIELDMESH_OFFSET_X;
-	f32 y = pos_dist.Y - WIELDMESH_OFFSET_Y;
-
-	f32 x_abs = std::fabs(x);
-	f32 y_abs = std::fabs(y);
-
-	if (x_abs >= y_abs) {
-		y *= (1.0f / x_abs);
-		x /= x_abs;
-	}
-
-	if (y_abs >= x_abs) {
-		x *= (1.0f / y_abs);
-		y /= y_abs;
-	}
-
-	return v2f(std::fabs(x), std::fabs(y));
-}
-
-void Camera::addArmInertia(f32 player_yaw)
-{
-	m_cam_vel.X = std::fabs(rangelim(m_last_cam_pos.X - player_yaw,
-		-100.0f, 100.0f) / 0.016f) * 0.01f;
-	m_cam_vel.Y = std::fabs((m_last_cam_pos.Y - m_camera_direction.Y) / 0.016f);
-	f32 gap_X = std::fabs(WIELDMESH_OFFSET_X - m_wieldmesh_offset.X);
-	f32 gap_Y = std::fabs(WIELDMESH_OFFSET_Y - m_wieldmesh_offset.Y);
-
-	if (m_cam_vel.X > 1.0f || m_cam_vel.Y > 1.0f) {
-		/*
-		    The arm moves relative to the camera speed,
-		    with an acceleration factor.
-		*/
-
-		if (m_cam_vel.X > 1.0f) {
-			if (m_cam_vel.X > m_cam_vel_old.X)
-				m_cam_vel_old.X = m_cam_vel.X;
-
-			f32 acc_X = 0.12f * (m_cam_vel.X - (gap_X * 0.1f));
-			m_wieldmesh_offset.X += m_last_cam_pos.X < player_yaw ? acc_X : -acc_X;
-
-			if (m_last_cam_pos.X != player_yaw)
-				m_last_cam_pos.X = player_yaw;
-
-			m_wieldmesh_offset.X = rangelim(m_wieldmesh_offset.X,
-				WIELDMESH_OFFSET_X - (WIELDMESH_AMPLITUDE_X * 0.5f),
-				WIELDMESH_OFFSET_X + (WIELDMESH_AMPLITUDE_X * 0.5f));
-		}
-
-		if (m_cam_vel.Y > 1.0f) {
-			if (m_cam_vel.Y > m_cam_vel_old.Y)
-				m_cam_vel_old.Y = m_cam_vel.Y;
-
-			f32 acc_Y = 0.12f * (m_cam_vel.Y - (gap_Y * 0.1f));
-			m_wieldmesh_offset.Y +=
-				m_last_cam_pos.Y > m_camera_direction.Y ? acc_Y : -acc_Y;
-
-			if (m_last_cam_pos.Y != m_camera_direction.Y)
-				m_last_cam_pos.Y = m_camera_direction.Y;
-
-			m_wieldmesh_offset.Y = rangelim(m_wieldmesh_offset.Y,
-				WIELDMESH_OFFSET_Y - (WIELDMESH_AMPLITUDE_Y * 0.5f),
-				WIELDMESH_OFFSET_Y + (WIELDMESH_AMPLITUDE_Y * 0.5f));
-		}
-
-		m_arm_dir = dir(m_wieldmesh_offset);
-	} else {
-		/*
-		    Now the arm gets back to its default position when the camera stops,
-		    following a vector, with a smooth deceleration factor.
-		*/
-
-		f32 dec_X = 0.35f * (std::min(15.0f, m_cam_vel_old.X) * (1.0f +
-			(1.0f - m_arm_dir.X))) * (gap_X / 20.0f);
-
-		f32 dec_Y = 0.25f * (std::min(15.0f, m_cam_vel_old.Y) * (1.0f +
-			(1.0f - m_arm_dir.Y))) * (gap_Y / 15.0f);
-
-		if (gap_X < 0.1f)
-			m_cam_vel_old.X = 0.0f;
-
-		m_wieldmesh_offset.X -=
-			m_wieldmesh_offset.X > WIELDMESH_OFFSET_X ? dec_X : -dec_X;
-
-		if (gap_Y < 0.1f)
-			m_cam_vel_old.Y = 0.0f;
-
-		m_wieldmesh_offset.Y -=
-			m_wieldmesh_offset.Y > WIELDMESH_OFFSET_Y ? dec_Y : -dec_Y;
 	}
 }
 
@@ -510,50 +371,6 @@ void Camera::update(LocalPlayer* player, f32 frametime, f32 tool_reload_ratio)
 	// Make new matrices and frustum
 	m_cameranode->updateMatrices();
 
-	if (m_arm_inertia)
-		addArmInertia(yaw);
-
-	// Position the wielded item
-	v3f wield_position = v3f(m_wieldmesh_offset.X, m_wieldmesh_offset.Y, 65);
-	v3f wield_rotation = v3f(-100, 120, -100);
-	wield_position.Y += std::abs(m_wield_change_timer)*320 - 40;
-	if(m_digging_anim < 0.05 || m_digging_anim > 0.5)
-	{
-		f32 frac = 1.0;
-		if(m_digging_anim > 0.5)
-			frac = 2.0 * (m_digging_anim - 0.5);
-		// This value starts from 1 and settles to 0
-		f32 ratiothing = std::pow((1.0f - tool_reload_ratio), 0.5f);
-		f32 ratiothing2 = (easeCurve(ratiothing*0.5))*2.0;
-		wield_position.Y -= frac * 25.0f * std::pow(ratiothing2, 1.7f);
-		wield_position.X -= frac * 35.0f * std::pow(ratiothing2, 1.1f);
-		wield_rotation.Y += frac * 70.0f * std::pow(ratiothing2, 1.4f);
-	}
-	if (m_digging_button != -1)
-	{
-		f32 digfrac = m_digging_anim;
-		wield_position.X -= 50 * std::sin(std::pow(digfrac, 0.8f) * M_PI);
-		wield_position.Y += 24 * std::sin(digfrac * 1.8 * M_PI);
-		wield_position.Z += 25 * 0.5;
-
-		// Euler angles are PURE EVIL, so why not use quaternions?
-		core::quaternion quat_begin(wield_rotation * core::DEGTORAD);
-		core::quaternion quat_end(v3f(80, 30, 100) * core::DEGTORAD);
-		core::quaternion quat_slerp;
-		quat_slerp.slerp(quat_begin, quat_end, std::sin(digfrac * M_PI));
-		quat_slerp.toEuler(wield_rotation);
-		wield_rotation *= core::RADTODEG;
-	} else {
-		f32 bobfrac = my_modf(m_view_bobbing_anim);
-		wield_position.X -= std::sin(bobfrac*M_PI*2.0) * 3.0;
-		wield_position.Y += std::sin(my_modf(bobfrac*2.0)*M_PI) * 3.0;
-	}
-	m_wieldnode->setPosition(wield_position);
-	m_wieldnode->setRotation(wield_rotation);
-
-	m_player_light_color = player->light_color;
-	m_wieldnode->setNodeLightColor(m_player_light_color);
-
 	// Set render distance
 	updateViewingRange();
 
@@ -594,25 +411,7 @@ void Camera::updateViewingRange()
 	m_cameranode->setFarValue((viewing_range < 2000) ? 2000 * BS : viewing_range * BS);
 }
 
-void Camera::setDigging(s32 button)
-{
-	if (m_digging_button == -1)
-		m_digging_button = button;
-}
-
-void Camera::wield(const ItemStack &item)
-{
-	if (item.name != m_wield_item_next.name ||
-			item.metadata != m_wield_item_next.metadata) {
-		m_wield_item_next = item;
-		if (m_wield_change_timer > 0)
-			m_wield_change_timer = -m_wield_change_timer;
-		else if (m_wield_change_timer == 0)
-			m_wield_change_timer = -0.001;
-	}
-}
-
-void Camera::drawWieldedTool(irr::core::matrix4* translation)
+/*void Camera::drawWieldedTool(irr::core::matrix4* translation)
 {
 	// Clear Z buffer so that the wielded tool stays in front of world geometry
 	m_wieldmgr->getVideoDriver()->clearBuffers(video::ECBF_DEPTH);
@@ -637,7 +436,7 @@ void Camera::drawWieldedTool(irr::core::matrix4* translation)
 		cam->setTarget(focusPoint);
 	}
 	m_wieldmgr->drawAll();
-}
+}*/
 
 void Camera::drawNametags()
 {

@@ -1737,7 +1737,13 @@ void Server::SendHUDAdd(session_t peer_id, u32 id, HudElement *form)
 	pkt << id << (u8) form->type << form->pos << form->name << form->scale
 			<< form->text << form->number << form->item << form->dir
 			<< form->align << form->offset << form->world_pos << form->size
-			<< form->z_index << form->text2 << form->style;
+			<< form->z_index << form->text2 << form->style << form->z_offset
+			<< form->rotation << (u16)form->textures.size();
+
+	for (const std::string &texture : form->textures)
+		pkt << texture;
+
+	pkt << form->lighting << form->parent;
 
 	Send(&pkt);
 }
@@ -1767,10 +1773,27 @@ void Server::SendHUDChange(session_t peer_id, u32 id, HudElementStat stat, void 
 			pkt << *(std::string *) value;
 			break;
 		case HUD_STAT_WORLD_POS:
+		case HUD_STAT_ROTATION:
 			pkt << *(v3f *) value;
 			break;
 		case HUD_STAT_SIZE:
 			pkt << *(v2s32 *) value;
+			break;
+		case HUD_STAT_Z_OFFSET:
+			pkt << *(f32 *) value;
+			break;
+		case HUD_STAT_TEXTURES:
+		{
+			auto textures = *(std::vector<std::string>*)value;
+
+			pkt << (u16)textures.size();
+
+			for (const std::string &texture : textures)
+				pkt << texture;
+			break;
+		}
+		case HUD_STAT_LIGHTING:
+			pkt << *(bool *)value;
 			break;
 		default: // all other types
 			pkt << *(u32 *) value;

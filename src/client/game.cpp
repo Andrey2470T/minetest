@@ -1027,7 +1027,6 @@ Game::~Game()
 	sound_manager.reset();
 
 	delete server;
-
 	delete hud;
 	delete camera;
 	delete quicktune;
@@ -1168,6 +1167,7 @@ void Game::run()
 			&& !(*kill || g_gamecallback->shutdown_requested
 			|| (server && server->isShutdownRequested()))) {
 
+		//infostream << "Game::run(): 1" << std::endl;
 		// Calculate dtime =
 		//    m_rendering_engine->run() from this iteration
 		//  + Sleep time until the wanted FPS are reached
@@ -1179,29 +1179,40 @@ void Game::run()
 			dynamic_info_send_timer = 0.2f;
 		}
 
+		//infostream << "Game::run(): 2" << std::endl;
 		if (dynamic_info_send_timer > 0.0f) {
 			dynamic_info_send_timer -= dtime;
 			if (dynamic_info_send_timer <= 0.0f) {
 				client->sendUpdateClientInfo(current_dynamic_info);
 			}
 		}
-
+		//infostream << "Game::run(): 3" << std::endl;
 		// Prepare render data for next iteration
 
 		updateStats(&stats, draw_times, dtime);
 		updateInteractTimers(dtime);
 
+		//infostream << "Game::run(): 4" << std::endl;
 		if (!checkConnection())
 			break;
+		//infostream << "Game::run(): 5" << std::endl;
 		if (!handleCallbacks())
+		{
+			infostream << "Game::run(): 5.1" << std::endl;
 			break;
+		}
+		//infostream << "Game::run(): 6" << std::endl;
 
 		processQueues();
+		//infostream << "Game::run(): 7" << std::endl;
 
 		m_game_ui->clearInfoText();
+		//infostream << "Game::run(): 8" << std::endl;
 
+		//infostream << "Game::run(): 9" << std::endl;
 		updateProfilers(stats, draw_times, dtime);
 		processUserInput(dtime);
+		//infostream << "Game::run(): 10" << std::endl;
 		// Update camera before player movement to avoid camera lag of one frame
 		updateCameraDirection(&cam_view_target, dtime);
 		cam_view.camera_yaw += (cam_view_target.camera_yaw -
@@ -1210,23 +1221,35 @@ void Game::run()
 				cam_view.camera_pitch) * m_cache_cam_smoothing;
 		updatePlayerControl(cam_view);
 
+		//infostream << "Game::run(): 11" << std::endl;
 		updatePauseState();
 		if (m_is_paused)
 			dtime = 0.0f;
 
 		step(dtime);
 
+		//infostream << "Game::run(): 12" << std::endl;
 		processClientEvents(&cam_view_target);
+		//infostream << "Game::run(): 13" << std::endl;
 		updateDebugState();
+		//infostream << "Game::run(): 14" << std::endl;
 		updateCamera(dtime);
+		//infostream << "Game::run(): 15" << std::endl;
+		hud->step(dtime);
+		//infostream << "Game::run(): 16" << std::endl;
 		updateSound(dtime);
+		//infostream << "Game::run(): 17" << std::endl;
 		processPlayerInteraction(dtime, m_game_ui->m_flags.show_hud);
+		//infostream << "Game::run(): 18" << std::endl;
 		updateFrame(&graph, &stats, dtime, cam_view);
+		//infostream << "Game::run(): 19" << std::endl;
 		updateProfilerGraphs(&graph);
 
+		//infostream << "Game::run(): 20" << std::endl;
 		if (m_does_lost_focus_pause_game && !device->isWindowFocused() && !isMenuActive()) {
 			showPauseMenu();
 		}
+		//infostream << "Game::run(): 21" << std::endl;
 	}
 
 	RenderingEngine::autosaveScreensizeAndCo(initial_screen_size, initial_window_maximized);
@@ -1301,7 +1324,6 @@ void Game::shutdown()
 	}
 
 	stop_thread->rethrow();
-
 	// to be continued in Game::~Game
 }
 
@@ -1441,7 +1463,7 @@ void Game::copyServerClientCache()
 {
 	// It would be possible to let the client directly read the media files
 	// from where the server knows they are. But aside from being more complicated
-	// it would also *not* fill the media cache and cause slower joining of 
+	// it would also *not* fill the media cache and cause slower joining of
 	// remote servers.
 	// (Imagine that you launch a game once locally and then connect to a server.)
 
@@ -2932,6 +2954,7 @@ void Game::handleClientEvent_HandleParticleEvent(ClientEvent *event,
 
 void Game::handleClientEvent_HudAdd(ClientEvent *event, CameraOrientation *cam)
 {
+	infostream << "handleClientEvent_HudAdd() : 1 " << std::endl;
 	LocalPlayer *player = client->getEnv().getLocalPlayer();
 
 	u32 server_id = event->hudadd->server_id;
@@ -2941,7 +2964,7 @@ void Game::handleClientEvent_HudAdd(ClientEvent *event, CameraOrientation *cam)
 		delete event->hudadd;
 		return;
 	}
-
+	infostream << "handleClientEvent_HudAdd() : 2 " << std::endl;
 	HudElement *e = new HudElement;
 	e->type   = static_cast<HudElementType>(event->hudadd->type);
 	e->pos    = event->hudadd->pos;
@@ -2958,9 +2981,20 @@ void Game::handleClientEvent_HudAdd(ClientEvent *event, CameraOrientation *cam)
 	e->z_index   = event->hudadd->z_index;
 	e->text2     = event->hudadd->text2;
 	e->style     = event->hudadd->style;
+	e->z_offset  = event->hudadd->z_offset;
+	e->rotation  = event->hudadd->rotation;
+	e->textures  = event->hudadd->textures;
+	e->lighting  = event->hudadd->lighting;
+	e->parent    = event->hudadd->parent;
 	m_hud_server_to_client[server_id] = player->addHud(e);
 
 	delete event->hudadd;
+	infostream << "handleClientEvent_HudAdd() : 3 " << std::endl;
+	if (e->type == HUD_ELEM_MESH) {
+		infostream << "handleClientEvent_HudAdd() : 3.1 " << std::endl;
+		hud->addHUDScene(m_hud_server_to_client[server_id], *e);
+	}
+	infostream << "handleClientEvent_HudAdd() : 4 " << std::endl;
 }
 
 void Game::handleClientEvent_HudRemove(ClientEvent *event, CameraOrientation *cam)
@@ -2970,6 +3004,9 @@ void Game::handleClientEvent_HudRemove(ClientEvent *event, CameraOrientation *ca
 	auto i = m_hud_server_to_client.find(event->hudrm.id);
 	if (i != m_hud_server_to_client.end()) {
 		HudElement *e = player->removeHud(i->second);
+
+		if (e->type == HUD_ELEM_MESH)
+			hud->removeHUDScene(i->first);
 		delete e;
 		m_hud_server_to_client.erase(i);
 	}
@@ -3025,6 +3062,16 @@ void Game::handleClientEvent_HudChange(ClientEvent *event, CameraOrientation *ca
 		CASE_SET(HUD_STAT_TEXT2, text2, sdata);
 
 		CASE_SET(HUD_STAT_STYLE, style, data);
+
+		CASE_SET(HUD_STAT_Z_OFFSET, z_offset, fdata);
+
+		CASE_SET(HUD_STAT_ROTATION, rotation, v3fdata);
+
+		CASE_SET(HUD_STAT_TEXTURES, textures, vsdata);
+
+		CASE_SET(HUD_STAT_LIGHTING, lighting, booldata);
+
+		CASE_SET(HUD_STAT_PARENT, parent, data);
 
 		case HudElementStat_END:
 			break;
@@ -3428,7 +3475,7 @@ void Game::processPlayerInteraction(f32 dtime, bool show_hud)
 	runData.pointed_old = pointed;
 
 	if (runData.punching || wasKeyPressed(KeyType::DIG))
-		camera->setDigging(0); // dig animation
+		hud->getWieldMeshNode()->setDigging(0); // dig animation
 
 	input->clearWasKeyPressed();
 	input->clearWasKeyReleased();
@@ -3591,7 +3638,7 @@ void Game::handlePointingAtNode(const PointedThing &pointed,
 		infostream << "Place button pressed while looking at ground" << std::endl;
 
 		// Placing animation (always shown for feedback)
-		camera->setDigging(1);
+		hud->getWieldMeshNode()->setDigging(1);
 
 		soundmaker->m_player_rightpunch_sound = SoundSpec();
 
@@ -4024,12 +4071,13 @@ void Game::handleDigging(const PointedThing &pointed, const v3s16 &nodepos,
 		client->setCrack(-1, nodepos);
 	}
 
-	camera->setDigging(0);  // Dig animation
+	hud->getWieldMeshNode()->setDigging(0);  // Dig animation
 }
 
 void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 		const CameraOrientation &cam)
 {
+	//infostream << "Game::updateFrame(): 1" << std::endl;
 	TimeTaker tt_update("Game::updateFrame()");
 	LocalPlayer *player = client->getEnv().getLocalPlayer();
 
@@ -4038,11 +4086,11 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 	*/
 
 	client->getEnv().updateFrameTime(m_is_paused);
-
+	//infostream << "Game::updateFrame(): 2" << std::endl;
 	/*
 		Fog range
 	*/
-
+	//infostream << "Game::updateFrame(): 3" << std::endl;
 	if (sky->getFogDistance() >= 0) {
 		draw_control->wanted_range = MYMIN(draw_control->wanted_range, sky->getFogDistance());
 	}
@@ -4051,7 +4099,7 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 	} else {
 		runData.fog_range = draw_control->wanted_range * BS;
 	}
-
+	//infostream << "Game::updateFrame(): 4" << std::endl;
 	/*
 		Calculate general brightness
 	*/
@@ -4073,7 +4121,7 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 					daynight_ratio, (int)(old_brightness * 255.5), &sunlight_seen)
 				    / 255.0;
 	}
-
+	//infostream << "Game::updateFrame(): 5" << std::endl;
 	float time_of_day_smooth = runData.time_of_day_smooth;
 	float time_of_day = client->getEnv().getTimeOfDayF();
 
@@ -4097,7 +4145,7 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 	sky->update(time_of_day_smooth, time_brightness, direct_brightness,
 			sunlight_seen, camera->getCameraMode(), player->getYaw(),
 			player->getPitch());
-
+	//infostream << "Game::updateFrame(): 6" << std::endl;
 	/*
 		Update clouds
 	*/
@@ -4108,7 +4156,7 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 		Update particles
 	*/
 	client->getParticleManager()->step(dtime);
-
+	//infostream << "Game::updateFrame(): 7" << std::endl;
 	/*
 		Damage camera tilt
 	*/
@@ -4132,21 +4180,24 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 	*/
 
 	updateChat(dtime);
-
+	//infostream << "Game::updateFrame(): 8" << std::endl;
 	/*
 		Inventory
 	*/
 
 	if (player->getWieldIndex() != runData.new_playeritem)
 		client->setPlayerItem(runData.new_playeritem);
-
+	//infostream << "Game::updateFrame(): 9" << std::endl;
 	if (client->updateWieldedItem()) {
+		//infostream << "Game::updateFrame(): 10" << std::endl;
 		// Update wielded tool
 		ItemStack selected_item, hand_item;
 		ItemStack &tool_item = player->getWieldedItem(&selected_item, &hand_item);
-		camera->wield(tool_item);
+		//infostream << "Game::updateFrame(): 11" << std::endl;
+		hud->updateWieldMesh(tool_item);
+		//infostream << "Game::updateFrame(): 12" << std::endl;
 	}
-
+	//infostream << "Game::updateFrame(): 13" << std::endl;
 	/*
 		Update block draw list every 200ms or when camera direction has
 		changed much
@@ -4175,7 +4226,7 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 	}
 
 	m_game_ui->update(*stats, client, draw_control, cam, runData.pointed_old, gui_chat_console, dtime);
-
+	//infostream << "Game::updateFrame(): 14" << std::endl;
 	/*
 	   make sure menu is on top
 	   1. Delete formspec menu reference if menu was removed
@@ -4204,7 +4255,7 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 		if (isMenuActive())
 			guiroot->bringToFront(formspec);
 	} while (false);
-
+	//infostream << "Game::updateFrame(): 15" << std::endl;
 	/*
 		==================== Drawing begins ====================
 	*/
@@ -4219,7 +4270,7 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 	if (runData.damage_flash > 0.0f) {
 		runData.damage_flash -= 384.0f * dtime;
 	}
-
+	//infostream << "Game::updateFrame(): 16" << std::endl;
 	g_profiler->avg("Game::updateFrame(): update frame [ms]", tt_update.stop(true));
 }
 
@@ -4289,6 +4340,7 @@ void Game::updateShadows()
 
 void Game::drawScene(ProfilerGraph *graph, RunStats *stats)
 {
+	//infostream << "Game::drawScene(): 1" << std::endl;
 	const video::SColor fog_color = this->sky->getFogColor();
 	const video::SColor sky_color = this->sky->getSkyColor();
 
@@ -4316,27 +4368,28 @@ void Game::drawScene(ProfilerGraph *graph, RunStats *stats)
 				false // range fog
 		);
 	}
-
+	//infostream << "Game::drawScene(): 2" << std::endl;
 	/*
 		Drawing
 	*/
 	TimeTaker tt_draw("Draw scene", nullptr, PRECISION_MICRO);
 	this->driver->beginScene(true, true, sky_color);
-
+	//infostream << "Game::drawScene(): 3" << std::endl;
 	const LocalPlayer *player = this->client->getEnv().getLocalPlayer();
 	bool draw_wield_tool = (this->m_game_ui->m_flags.show_hud &&
 			(player->hud_flags & HUD_FLAG_WIELDITEM_VISIBLE) &&
 			(this->camera->getCameraMode() == CAMERA_MODE_FIRST));
+	//infostream << "Game::drawScene(): 4" << std::endl;
 	bool draw_crosshair = (
 			(player->hud_flags & HUD_FLAG_CROSSHAIR_VISIBLE) &&
 			(this->camera->getCameraMode() != CAMERA_MODE_THIRD_FRONT));
-
+	//infostream << "Game::drawScene(): 5" << std::endl;
 	if (g_touchscreengui && isTouchCrosshairDisabled())
 		draw_crosshair = false;
-
+	//infostream << "Game::drawScene(): 6" << std::endl;
 	this->m_rendering_engine->draw_scene(sky_color, this->m_game_ui->m_flags.show_hud,
 			draw_wield_tool, draw_crosshair);
-
+	//infostream << "Game::drawScene(): 7" << std::endl;
 	/*
 		Profiler graph
 	*/
@@ -4344,7 +4397,7 @@ void Game::drawScene(ProfilerGraph *graph, RunStats *stats)
 
 	if (this->m_game_ui->m_flags.show_profiler_graph)
 		graph->draw(10, screensize.Y - 10, driver, g_fontengine->getFont());
-
+	//infostream << "Game::drawScene(): 8" << std::endl;
 	/*
 		Damage flash
 	*/
@@ -4354,12 +4407,12 @@ void Game::drawScene(ProfilerGraph *graph, RunStats *stats)
 					core::rect<s32>(0, 0, screensize.X, screensize.Y),
 					NULL);
 	}
-
+	//infostream << "Game::drawScene(): 9" << std::endl;
 	this->driver->endScene();
 
 	stats->drawtime = tt_draw.stop(true);
 	g_profiler->graphAdd("Draw scene [us]", stats->drawtime);
-
+	//infostream << "Game::drawScene(): 10" << std::endl;
 }
 
 /****************************************************************************
@@ -4569,7 +4622,6 @@ void the_game(bool *kill,
 				error_message, reconnect_requested, &chat_backend)) {
 			game.run();
 		}
-
 	} catch (SerializationError &e) {
 		const std::string ver_err = fmtgettext("The server is probably running a different version of %s.", PROJECT_NAME_C);
 		error_message = strgettext("A serialization error occurred:") +"\n"
@@ -4590,6 +4642,5 @@ void the_game(bool *kill,
 		error_message = e.what();
 		errorstream << error_message << std::endl;
 	}
-
 	game.shutdown();
 }

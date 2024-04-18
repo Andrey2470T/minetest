@@ -64,6 +64,11 @@ struct ClientEventHudAdd
 	v3f world_pos;
 	v2s32 size;
 	s16 z_index;
+	f32 z_offset;
+	v3f rotation;
+	std::vector<std::string> textures;
+	bool lighting;
+	u32 parent;
 };
 
 struct ClientEventHudChange
@@ -75,6 +80,9 @@ struct ClientEventHudChange
 	u32 data;
 	v3f v3fdata;
 	v2s32 v2s32data;
+	f32 fdata;
+	std::vector<std::string> vsdata;
+	bool booldata;
 };
 
 struct ClientEvent

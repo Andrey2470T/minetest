@@ -28,6 +28,7 @@ class Client;
 class ITextureSource;
 struct ContentFeatures;
 class ShadowRenderer;
+class HudElement;
 
 /*
  * Holds color information of an item mesh's buffer.
@@ -86,9 +87,119 @@ struct ItemMesh
 };
 
 /*
+	Builds extrusion meshes per an unique resolution and caches them
+ */
+class MeshHUDBuilder
+{
+public:
+	MeshHUDBuilder()
+	{
+		m_cube_mesh = createCubeMesh(v3f(1.0, 1.0, 1.0));
+	}
+
+	~MeshHUDBuilder()
+	{
+		for (auto &m : m_extrusion_meshes)
+			m.second->drop();
+
+		m_cube_mesh->drop();
+	}
+
+	scene::IMesh* getCachedMesh(core::dimension2du dim);
+	scene::IMesh* getCubeMesh() { return m_cube_mesh; }
+
+	scene::IMesh* createExtrusionMesh(core::dimension2du dim);
+
+private:
+	// Map of mesh caches per a resolution
+	std::map<core::dimension2du, scene::IMesh*> m_extrusion_meshes;
+	// Mesh of 1x1x1 cube
+	scene::IMesh *m_cube_mesh;
+};
+
+class MeshHUDSceneNode : public scene::IMeshSceneNode
+{
+public:
+	MeshHUDSceneNode(scene::ISceneManager *mgr, s32 id = -1, Client *client, MeshHUDBuilder *mh_builder,
+		const HudElement *elem, bool lighting=false);
+	virtual ~MeshHUDSceneNode()
+	{
+		if (m_shadow)
+			m_shadow->removeNodeFromShadowList(this);
+	}
+
+	virtual scene::IShadowVolumeSceneNode *addShadowVolumeSceneNode(const IMesh *shadowMesh=0, s32 id=-1, bool zfailmethod=true, f32 infinity=1000.0f) {}
+
+	virtual scene::IMesh *getMesh() const { return m_hud_mesh; }
+
+	virtual bool isReadOnlyMaterials() const { return false; }
+
+	virtual void setMesh(scene::IMesh *mesh);
+
+	virtual void setReadOnlyMaterials(bool readonly) {}
+
+	virtual void OnRegisterSceneNode();
+	virtual void render();
+
+	v3f calculateViewPos(v2f screen_pos);
+
+	void setColor(video::SColor light_color);
+	void setNodeLightColor(video::SColor light_color);
+
+	void setCubeMesh(const ContentFeatures &f, v3f wield_scale, v3f rel_scale);
+	void setExtrudedMesh(const std::string &imagename, const std::string &overlay_name,
+		v3f wield_scale, u8 num_frames, v3f rel_scale);
+	void setItem(const ItemStack &item, bool check_wield_image = true, v3f rel_scale = v3f(1.0));
+
+	void postProcessMesh(scene::IMesh *mesh, bool set_wrap_to_edge, bool backface_culling,
+		bool enable_filter, bool use_mipmaps);
+	void postProcessNodeMesh(scene::IMesh *mesh, const ContentFeatures &f, bool set_material,
+	const video::E_MATERIAL_TYPE *mattype, std::vector<ItemPartColor> *colors, bool apply_scale);
+
+	virtual void step(f32 dtime);
+
+private:
+	Client *m_client;
+	scene::IMesh *m_hud_mesh;
+
+	std::string m_last_text;
+	v3f m_last_relative_scale;
+	v3f m_constant_scale;
+
+	ShadowRenderer *m_shadow;
+
+	ITextureSource *m_tsrc;
+	MeshHUDBuilder *m_meshhud_builder;
+
+	bool m_lighting;
+	bool m_enable_shaders;
+	bool m_anisotropic_filter;
+	bool m_bilinear_filter;
+	bool m_trilinear_filter;
+
+	const HudElement *m_hud_elem;
+
+	video::E_MATERIAL_TYPE m_material_type;
+
+	bool m_lighting;
+	/*!
+	 * Stores the colors of the mesh's mesh buffers.
+	 * This does not include lighting.
+	 */
+	std::vector<ItemPartColor> m_colors;
+	/*!
+	 * The base color of this mesh. This is the default
+	 * for all mesh buffers.
+	 */
+	video::SColor m_base_color;
+
+	video::SColor m_player_light_color;
+};
+
+/*
 	Wield item scene node, renders the wield mesh of some item
 */
-class WieldMeshSceneNode : public scene::ISceneNode
+/*class WieldMeshSceneNode : public scene::ISceneNode
 {
 public:
 	WieldMeshSceneNode(scene::ISceneManager *mgr, s32 id = -1, bool lighting = false);
@@ -125,25 +236,25 @@ private:
 	bool m_enable_shaders;
 	bool m_anisotropic_filter;
 	bool m_bilinear_filter;
-	bool m_trilinear_filter;
+	bool m_trilinear_filter;*/
 	/*!
 	 * Stores the colors of the mesh's mesh buffers.
 	 * This does not include lighting.
 	 */
-	std::vector<ItemPartColor> m_colors;
+	//std::vector<ItemPartColor> m_colors;
 	/*!
 	 * The base color of this mesh. This is the default
 	 * for all mesh buffers.
 	 */
-	video::SColor m_base_color;
+	//video::SColor m_base_color;
 
 	// Bounding box culling is disabled for this type of scene node,
 	// so this variable is just required so we can implement
 	// getBoundingBox() and is set to an empty box.
-	aabb3f m_bounding_box;
+	//aabb3f m_bounding_box;
 
-	ShadowRenderer *m_shadow;
-};
+	//ShadowRenderer *m_shadow;
+//};
 
 void getItemMesh(Client *client, const ItemStack &item, ItemMesh *result);
 

@@ -23,6 +23,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "util/numeric.h" // IntervalLimiter
 #include "activeobjectmgr.h" // client::ActiveObjectMgr
 #include <set>
+#include "client/hudmesh.h"
 
 #ifdef SERVER
 #error Do not include in server builds
@@ -149,6 +150,7 @@ public:
 	void updateFrameTime(bool is_paused);
 	u64 getFrameTime() const { return m_frame_time; }
 	u64 getFrameTimeDelta() const { return m_frame_dtime; }
+	HUDMeshCacheManager *getMeshManager() { return &m_mesh_mgr; }
 
 private:
 	ClientMap *m_map;
@@ -157,6 +159,7 @@ private:
 	Client *m_client;
 	ClientScripting *m_script = nullptr;
 	client::ActiveObjectMgr m_ao_manager;
+	HUDMeshCacheManager m_mesh_mgr;
 	std::vector<ClientSimpleObject*> m_simple_objects;
 	std::queue<ClientEnvEvent> m_client_event_queue;
 	IntervalLimiter m_active_object_light_update_interval;

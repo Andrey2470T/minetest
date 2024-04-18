@@ -1677,7 +1677,16 @@ int ObjectRef::l_hud_add(lua_State *L)
 	HudElement *elem = new HudElement;
 	read_hud_element(L, elem);
 
+	if (elem->type == HUD_ELEM_MESH && elem->parent > 0) {
+		HudElement *parent_hud = player->getHud(elem->parent);
+		if (!parent_hud)
+			throw LuaError("Can not attach the mesh HUD to the inexistent parent!");
+		if (parent_hud->type != HUD_ELEM_MESH)
+			throw LuaError("Can not attach the mesh HUD to the parent one of non-mesh type!");
+	}
+
 	u32 id = getServer(L)->hudAdd(player, elem);
+	infostream << "hud id :" << id << std::endl;
 	if (id == U32_MAX) {
 		delete elem;
 		return 0;
@@ -1725,8 +1734,18 @@ int ObjectRef::l_hud_change(lua_State *L)
 	bool ok = read_hud_change(L, stat, elem, &value);
 
 	// FIXME: only send when actually changed
-	if (ok)
+	if (ok) {
+		if (elem->type == HUD_ELEM_MESH && stat == HUD_STAT_PARENT) {
+			HudElement * parent_hud = player->getHud(*(u32 *)value);
+
+			if (!parent_hud)
+				throw LuaError("Can not attach the mesh HUD to the inexistent parent!");
+			if (parent_hud->type != HUD_ELEM_MESH)
+				throw LuaError("Can not attach the mesh HUD to the parent one of non-mesh type!");
+		}
+
 		getServer(L)->hudChange(player, id, stat, value);
+	}
 
 	lua_pushboolean(L, ok);
 	return 1;

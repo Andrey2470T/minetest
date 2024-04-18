@@ -181,6 +181,7 @@ void Database_SQLite3::verifyDatabase()
 	PREPARE_STATEMENT(begin, "BEGIN;");
 	PREPARE_STATEMENT(end, "COMMIT;");
 
+	infostream << "player database: verifyDatabase()..." << std::endl;
 	initStatements();
 
 	m_initialized = true;
@@ -386,6 +387,7 @@ void PlayerDatabaseSQLite3::createDatabase()
 
 void PlayerDatabaseSQLite3::initStatements()
 {
+	infostream << "player database: initStatements()..." << std::endl;
 	PREPARE_STATEMENT(player_load, "SELECT `pitch`, `yaw`, `posX`, `posY`, `posZ`, `hp`, "
 		"`breath`"
 		"FROM `player` WHERE `name` = ?")
@@ -397,8 +399,10 @@ void PlayerDatabaseSQLite3::initStatements()
 	PREPARE_STATEMENT(player_remove, "DELETE FROM `player` WHERE `name` = ?")
 	PREPARE_STATEMENT(player_list, "SELECT `name` FROM `player`")
 
+	infostream << "player database: PREPARE_STATEMENT() call..." << std::endl;
 	PREPARE_STATEMENT(player_add_inventory, "INSERT INTO `player_inventories` "
 		"(`player`, `inv_id`, `inv_width`, `inv_name`, `inv_size`) VALUES (?, ?, ?, ?, ?)")
+	infostream << "player database: PREPARE_STATEMENT() call was succesful" << std::endl;
 	PREPARE_STATEMENT(player_add_inventory_items, "INSERT INTO `player_inventory_items` "
 		"(`player`, `inv_id`, `slot_id`, `item`) VALUES (?, ?, ?, ?)")
 	PREPARE_STATEMENT(player_remove_inventory, "DELETE FROM `player_inventories` "

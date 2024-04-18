@@ -38,7 +38,7 @@ private:
 	RenderTarget *m_target {nullptr};
 };
 
-class DrawWield : public RenderStep
+/*class DrawWield : public RenderStep
 {
 public:
 	virtual void setRenderSource(RenderSource *) override {}
@@ -49,7 +49,7 @@ public:
 
 private:
 	RenderTarget *m_target {nullptr};
-};
+};*/
 
 /**
  * Implements a pipeline step that renders the game HUD

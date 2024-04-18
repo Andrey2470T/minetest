@@ -41,31 +41,44 @@ void Draw3D::run(PipelineContext &context)
 	context.hud->drawSelectionMesh();
 }
 
-void DrawWield::run(PipelineContext &context)
+/*void DrawWield::run(PipelineContext &context)
 {
 	if (m_target)
 		m_target->activate(context);
 
 	if (context.draw_wield_tool)
 		context.client->getCamera()->drawWieldedTool();
-}
+}*/
 
 void DrawHUD::run(PipelineContext &context)
 {
+	//infostream << "DrawHUD::run(): 1" << std::endl;
 	if (context.show_hud) {
+		//infostream << "DrawHUD::run(): 2" << std::endl;
+		if (context.draw_wield_tool)
+			context.hud->drawMeshes();
+		//infostream << "DrawHUD::run(): 3" << std::endl;
+
 		if (context.shadow_renderer)
 			context.shadow_renderer->drawDebug();
+		//infostream << "DrawHUD::run(): 4" << std::endl;
 
 		context.hud->resizeHotbar();
+		//infostream << "DrawHUD::run(): 5" << std::endl;
 
 		if (context.draw_crosshair)
 			context.hud->drawCrosshair();
+		//infostream << "DrawHUD::run(): 6" << std::endl;
 
 		context.hud->drawHotbar(context.client->getEnv().getLocalPlayer()->getWieldIndex());
+		//infostream << "DrawHUD::run(): 7" << std::endl;
 		context.hud->drawLuaElements(context.client->getCamera()->getOffset());
+		//infostream << "DrawHUD::run(): 8" << std::endl;
 		context.client->getCamera()->drawNametags();
+		//infostream << "DrawHUD::run(): 9" << std::endl;
 	}
 	context.device->getGUIEnvironment()->drawAll();
+	//infostream << "DrawHUD::run(): 10" << std::endl;
 }
 
 
@@ -153,7 +166,7 @@ void populatePlainPipeline(RenderPipeline *pipeline, Client *client)
 	auto downscale_factor = getDownscaleFactor();
 	auto step3D = pipeline->own(create3DStage(client, downscale_factor));
 	pipeline->addStep(step3D);
-	pipeline->addStep<DrawWield>();
+	//pipeline->addStep<DrawWield>();
 	pipeline->addStep<MapPostFxStep>();
 
 	step3D = addUpscaling(pipeline, step3D, downscale_factor);

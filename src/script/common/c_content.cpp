@@ -2273,7 +2273,12 @@ void read_hud_element(lua_State *L, HudElement *elem)
 	lua_pop(L, 1);
 
 	lua_getfield(L, 2, "scale");
-	elem->scale = lua_istable(L, -1) ? read_v2f(L, -1) : v2f();
+
+	elem->scale = v2f();
+	if (lua_istable(L, -1))
+		elem->scale = read_v2f(L, -1);
+	else if (elem->type == HUD_ELEM_MESH)
+		elem->scale.X = 1.0f;
 	lua_pop(L, 1);
 
 	lua_getfield(L, 2, "size");
@@ -2294,8 +2299,7 @@ void read_hud_element(lua_State *L, HudElement *elem)
 		elem->item = getintfield_default(L, 2, "item", 0);
 	}
 	elem->dir     = getintfield_default(L, 2, "direction", 0);
-	elem->z_index = MYMAX(S16_MIN, MYMIN(S16_MAX,
-			getintfield_default(L, 2, "z_index", 0)));
+	elem->z_index = rangelim(getintfield_default(L, 2, "z_index", 0), S16_MIN, S16_MAX);
 	elem->text2   = getstringfield_default(L, 2, "text2", "");
 
 	// Deprecated, only for compatibility's sake
@@ -2319,6 +2323,36 @@ void read_hud_element(lua_State *L, HudElement *elem)
 	/* check for known deprecated element usage */
 	if ((elem->type  == HUD_ELEM_STATBAR) && (elem->size == v2s32()))
 		log_deprecated(L,"Deprecated usage of statbar without size!");
+
+	if (elem->type == HUD_ELEM_MESH) {
+		elem->z_offset = getfloatfield_default(L, 2, "z_offset", 65.0f);
+
+		lua_getfield(L, 2, "rotation");
+		elem->rotation = lua_istable(L, -1) ? read_v3f(L, -1) : v3f();
+		lua_pop(L, 1);
+
+		lua_getfield(L, 2, "textures");
+
+		if (lua_istable(L, -1)) {
+			elem->textures.clear();
+			int table = lua_gettop(L);
+			lua_pushnil(L);
+			while(lua_next(L, table) != 0){
+				// key at index -2 and value at index -1
+				if(lua_isstring(L, -1))
+					elem->textures.emplace_back(lua_tostring(L, -1));
+				else
+					elem->textures.emplace_back("");
+				// removes value, keeps key for next iteration
+				lua_pop(L, 1);
+			}
+		}
+
+		lua_pop(L, 1);
+
+		elem->lighting = getboolfield_default(L, 2, "lighting", true);
+		elem->parent = getintfield_default(L, 2, "parent", 0);
+	}
 }
 
 void push_hud_element(lua_State *L, HudElement *elem)
@@ -2381,6 +2415,29 @@ void push_hud_element(lua_State *L, HudElement *elem)
 
 	lua_pushinteger(L, elem->style);
 	lua_setfield(L, -2, "style");
+
+	if (elem->type == HUD_ELEM_MESH) {
+		lua_pushnumber(L, elem->z_offset);
+		lua_setfield(L, -2, "z_offset");
+
+		push_v3f(L, elem->rotation);
+		lua_setfield(L, -2, "rotation");
+
+		lua_createtable(L, elem->textures.size(), 0);
+
+		for (u32 i = 1; i <= elem->textures.size(); i++) {
+			lua_pushstring(L, elem->textures[i].c_str());
+			lua_rawseti(L, -2, i);
+		}
+
+		lua_setfield(L, -2, "textures");
+
+		lua_pushboolean(L, elem->lighting);
+		lua_setfield(L, -2, "lighting");
+
+		lua_pushnumber(L, elem->parent);
+		lua_setfield(L, -2, "parent");
+	}
 }
 
 bool read_hud_change(lua_State *L, HudElementStat &stat, HudElement *elem, void **value)
@@ -2454,6 +2511,40 @@ bool read_hud_change(lua_State *L, HudElementStat &stat, HudElement *elem, void 
 		case HUD_STAT_STYLE:
 			elem->style = luaL_checknumber(L, 4);
 			*value = &elem->style;
+			break;
+		case HUD_STAT_Z_OFFSET:
+			elem->z_offset = luaL_checknumber(L, 4);
+			*value = &elem->z_offset;
+			break;
+		case HUD_STAT_ROTATION:
+			elem->rotation = read_v3f(L, 4);
+			*value = &elem->rotation;
+			break;
+		case HUD_STAT_TEXTURES:
+		{
+			elem->textures.clear();
+			int table = lua_gettop(L);
+			lua_pushnil(L);
+			while(lua_next(L, table) != 0) {
+				// key at index -2 and value at index -1
+				if(lua_isstring(L, -1))
+					elem->textures.emplace_back(lua_tostring(L, -1));
+				else
+					elem->textures.emplace_back("");
+				// removes value, keeps key for next iteration
+				lua_pop(L, 1);
+			}
+			lua_pop(L, 1);
+			*value = &elem->textures;
+			break;
+		}
+		case HUD_STAT_LIGHTING:
+			elem->lighting = (bool)lua_toboolean(L, 4);
+			*value = &elem->lighting;
+			break;
+		case HUD_STAT_PARENT:
+			elem->parent = luaL_checkinteger(L, 4);
+			*value = &elem->parent;
 			break;
 		case HudElementStat_END:
 			return false;

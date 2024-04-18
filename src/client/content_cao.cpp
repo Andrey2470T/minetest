@@ -42,7 +42,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "nodedef.h"
 #include "settings.h"
 #include "tool.h"
-#include "wieldmesh.h"
 #include <algorithm>
 #include <cmath>
 #include "client/shader.h"
@@ -807,9 +806,10 @@ void GenericCAO::addToScene(ITextureSource *tsrc, scene::ISceneManager *smgr)
 			infostream << "serialized form: " << m_prop.wield_item << std::endl;
 			item.deSerialize(m_prop.wield_item, m_client->idef());
 		}
-		m_wield_meshnode = new WieldMeshSceneNode(m_smgr, -1);
-		m_wield_meshnode->setItem(item, m_client,
-			(m_prop.visual == "wielditem"));
+		//if (!m_mesh_builder)
+		//	m_mesh_builder = new MeshHUDBuilder();
+		m_wield_meshnode = new MeshHUDSceneNode(m_smgr, m_client, true);
+		m_env->getMeshManager()->getOrCreateMesh(item, m_client);//m_prop.visual == "wielditem");
 
 		m_wield_meshnode->setScale(m_prop.visual_size / 2.0f);
 	} else {
@@ -920,8 +920,6 @@ void GenericCAO::updateLight(u32 day_night_ratio)
 void GenericCAO::setNodeLight(const video::SColor &light_color)
 {
 	if (m_prop.visual == "wielditem" || m_prop.visual == "item") {
-		if (m_wield_meshnode)
-			m_wield_meshnode->setNodeLightColor(light_color);
 		return;
 	}
 

@@ -24,6 +24,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <IGUIFont.h>
 #include "irr_aabb3d.h"
 #include "../hud.h"
+#include "wield_hudmesh.h"
+
+#define WIELD_HUDMESH_SCENE_NODE_INDEX 0
 
 class Client;
 class ITextureSource;
@@ -69,6 +72,7 @@ public:
 	void drawCrosshair();
 	void drawSelectionMesh();
 	void updateSelectionMesh(const v3s16 &camera_offset);
+	void drawMeshes();
 
 	std::vector<aabb3f> *getSelectionBoxes() { return &m_selection_boxes; }
 
@@ -94,8 +98,26 @@ public:
 
 	void drawLuaElements(const v3s16 &camera_offset);
 
+	void addHUDScene(u32 hud_id, const HudElement &elem);
+	void removeHUDScene(u32 hud_id);
+
+	WieldMeshHUDSceneNode* getWieldMeshNode() {
+		return dynamic_cast<WieldMeshHUDSceneNode*>(m_hud_scenes[WIELD_HUDMESH_SCENE_NODE_INDEX]->getMeshNode());
+	}
+
+	void updateWieldMesh(const ItemStack &item) {
+		getWieldMeshNode()->wield(item);
+		/*infostream << "updateWieldMesh() : 1" << std::endl;
+		WieldMeshHUDSceneNode *wield_node = getWieldMeshNode();
+		infostream << "updateWieldMesh() : 2" << std::endl;
+		wield_node->wield(item);
+		infostream << "updateWieldMesh() : 3" << std::endl;*/
+	}
+	void step(f32 dtime);
+
 private:
 	bool calculateScreenPos(const v3s16 &camera_offset, HudElement *e, v2s32 *pos);
+
 	void drawStatbar(v2s32 pos, u16 corner, u16 drawdir,
 			const std::string &texture, const std::string& bgtexture,
 			s32 count, s32 maxcount, v2s32 offset, v2s32 size = v2s32());
@@ -117,6 +139,9 @@ private:
 	LocalPlayer *player = nullptr;
 	Inventory *inventory = nullptr;
 	ITextureSource *tsrc = nullptr;
+
+	std::unordered_map<u32, HUDScene*> m_hud_scenes;
+	//std::unordered_map<u32, video::ITexture*> m_hud_render_textures;
 
 	float m_hud_scaling; // cached minetest setting
 	float m_scale_factor;

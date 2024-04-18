@@ -1174,6 +1174,13 @@ void Client::handleCommand_HudAdd(NetworkPacket* pkt)
 	std::string text2;
 	u32 style = 0;
 
+	f32 z_offset;
+	v3f rotation;
+	u16 textures_count;
+	std::vector<std::string> textures;
+	bool lighting;
+	u32 parent;
+
 	*pkt >> server_id >> type >> pos >> name >> scale >> text >> number >> item
 		>> dir >> align >> offset;
 	try {
@@ -1183,6 +1190,16 @@ void Client::handleCommand_HudAdd(NetworkPacket* pkt)
 		*pkt >> text2;
 		*pkt >> style;
 	} catch(PacketError &e) {};
+
+	*pkt >> z_offset >> rotation >> textures_count;
+
+	for (int i = 0; i < textures_count; i++) {
+		std::string texture;
+		*pkt >> texture;
+		textures.push_back(texture);
+	}
+
+	*pkt >> lighting >> parent;
 
 	ClientEvent *event = new ClientEvent();
 	event->type              = CE_HUDADD;
@@ -1203,6 +1220,11 @@ void Client::handleCommand_HudAdd(NetworkPacket* pkt)
 	event->hudadd->z_index   = z_index;
 	event->hudadd->text2     = text2;
 	event->hudadd->style     = style;
+	event->hudadd->z_offset  = z_offset;
+	event->hudadd->rotation  = rotation;
+	event->hudadd->textures  = textures;
+	event->hudadd->lighting  = lighting;
+	event->hudadd->parent    = parent;
 	m_client_event_queue.push(event);
 }
 
@@ -1225,6 +1247,9 @@ void Client::handleCommand_HudChange(NetworkPacket* pkt)
 	v3f v3fdata;
 	u32 intdata = 0;
 	v2s32 v2s32data;
+	f32 fdata = 0.0f;
+	std::vector<std::string> vsdata;
+	bool booldata;
 	u32 server_id;
 	u8 stat;
 
@@ -1249,10 +1274,29 @@ void Client::handleCommand_HudChange(NetworkPacket* pkt)
 			*pkt >> sdata;
 			break;
 		case HUD_STAT_WORLD_POS:
+		case HUD_STAT_ROTATION:
 			*pkt >> v3fdata;
 			break;
 		case HUD_STAT_SIZE:
 			*pkt >> v2s32data;
+			break;
+		case HUD_STAT_Z_OFFSET:
+			*pkt >> fdata;
+			break;
+		case HUD_STAT_TEXTURES:
+		{
+			u16 textures_count;
+			*pkt >> textures_count;
+
+			for (int i = 0; i < textures_count; i++) {
+				std::string texture;
+				*pkt >> texture;
+				vsdata.push_back(texture);
+			}
+			break;
+		}
+		case HUD_STAT_LIGHTING:
+			*pkt >> booldata;
 			break;
 		default:
 			*pkt >> intdata;
@@ -1269,6 +1313,9 @@ void Client::handleCommand_HudChange(NetworkPacket* pkt)
 	event->hudchange->sdata     = sdata;
 	event->hudchange->data      = intdata;
 	event->hudchange->v2s32data = v2s32data;
+	event->hudchange->fdata     = fdata;
+	event->hudchange->vsdata    = vsdata;
+	event->hudchange->booldata  = booldata;
 	m_client_event_queue.push(event);
 }
 

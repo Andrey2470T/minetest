@@ -32,7 +32,6 @@ class Client;
 class IGameDef;
 class LocalPlayer;
 struct ItemStack;
-class WieldMeshSceneNode;
 
 class ClientActiveObject : public ActiveObject
 {

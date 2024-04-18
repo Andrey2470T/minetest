@@ -67,7 +67,8 @@ enum HudElementType {
 	HUD_ELEM_WAYPOINT  = 4,
 	HUD_ELEM_IMAGE_WAYPOINT = 5,
 	HUD_ELEM_COMPASS   = 6,
-	HUD_ELEM_MINIMAP   = 7
+	HUD_ELEM_MINIMAP   = 7,
+	HUD_ELEM_MESH      = 8
 };
 
 enum HudElementStat : u8 {
@@ -85,6 +86,12 @@ enum HudElementStat : u8 {
 	HUD_STAT_Z_INDEX,
 	HUD_STAT_TEXT2,
 	HUD_STAT_STYLE,
+
+	HUD_STAT_Z_OFFSET,
+	HUD_STAT_ROTATION,
+	HUD_STAT_TEXTURES,
+	HUD_STAT_LIGHTING,
+	HUD_STAT_PARENT,
 	HudElementStat_END // Dummy for validity check
 };
 
@@ -111,6 +118,12 @@ struct HudElement {
 	s16 z_index = 0;
 	std::string text2;
 	u32 style;
+
+	f32 z_offset;
+	v3f rotation;
+	std::vector<std::string> textures;
+	bool lighting;
+	u32 parent = 0;
 };
 
 extern const EnumString es_HudElementType[];

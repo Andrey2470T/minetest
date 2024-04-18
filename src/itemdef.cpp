@@ -26,7 +26,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef SERVER
 #include "client/mapblock_mesh.h"
 #include "client/mesh.h"
-#include "client/wieldmesh.h"
+#include "client/mesh_cache.h"
 #include "client/client.h"
 #endif
 #include "log.h"
@@ -362,6 +362,206 @@ void ItemDefinition::deSerialize(std::istream &is, u16 protocol_version)
 	} catch(SerializationError &e) {};
 }
 
+#ifndef SERVER
+// Creates and handles item meshes for inventory slots
+class InvMeshCacheManager : public MeshCacheManager
+{
+public:
+	InvMeshCacheManager()
+	{
+		m_main_thread = std::this_thread::get_id();
+	}
+
+	~InvMeshCacheManager() = default;
+
+	DISABLE_CLASS_COPY(InvMeshCacheManager);
+
+	virtual ItemMesh* getOrCreateMesh(const ItemStack &item, Client *client) override
+	{
+		//infostream << "Inv getOrCreateMesh(): 1" << std::endl;
+		// This is not thread-safe
+		sanity_check(std::this_thread::get_id() == m_main_thread);
+
+		ITextureSource *tsrc = client->getTextureSource();
+		IItemDefManager *idef = client->getItemDefManager();
+		const NodeDefManager *ndef = client->getNodeDefManager();
+
+		const ItemDefinition &def = item.getDefinition(idef);
+		const ContentFeatures &f = ndef->get(def.name);
+
+		std::string inventory_image = item.getInventoryImage(idef);
+		std::string inventory_overlay = item.getInventoryOverlay(idef);
+		std::string cache_key = def.name;
+
+		if (!inventory_image.empty())
+			cache_key += "/" + inventory_image;
+		if (!inventory_overlay.empty())
+			cache_key += ":" + inventory_overlay;
+		//infostream << "Inv getOrCreateMesh(): 2" << std::endl;
+		// Skip if already in cache
+		auto it = m_cache.find(cache_key);
+		//infostream << "Inv getOrCreateMesh(): 2.1" << std::endl;
+		//infostream << "Inv getOrCreateMesh(): " << cache_key << std::endl;
+		if (it != m_cache.end()) {
+			//infostream << "Inv getOrCreateMesh(): drawtype: " << f.drawtype << std::endl;
+			return it->second.get();
+		}
+		//infostream << "Inv getOrCreateMesh(): 3" << std::endl;
+		infostream << "Lazily creating item texture and mesh for \""
+				<< cache_key << "\"" << std::endl;
+
+		// Create new ItemMesh
+		ItemMesh *imesh = new ItemMesh();
+
+		imesh->base_color = idef->getItemstackColor(item, client);
+		//infostream << "Inv getOrCreateMesh(): 4" << std::endl;
+		if (!inventory_image.empty()) {
+			//infostream << "Inv getOrCreateMesh(): 5" << std::endl;
+			getExtrusionMesh(imesh, tsrc, inventory_image, inventory_overlay);
+			imesh->needs_shading = false;
+		}
+		else if (def.type == ITEM_NODE) {
+			switch (f.drawtype) {
+			case NDT_AIRLIKE: {
+				//infostream << "Inv getOrCreateMesh(): 6" << std::endl;
+				getExtrusionMesh(imesh, tsrc, "no_texture_airlike.png", inventory_overlay);
+				imesh->needs_shading = false;
+				break;
+			}
+			case NDT_NORMAL:
+			case NDT_ALLFACES: {
+			case NDT_LIQUID:
+			case NDT_FLOWINGLIQUID:
+				//infostream << "Inv getOrCreateMesh(): 7" << std::endl;
+				getCubeMesh(imesh, f);
+				break;
+			}
+			case NDT_PLANTLIKE: {
+				//infostream << "Inv getOrCreateMesh(): 8" << std::endl;
+				const TileLayer &l0 = f.tiles[0].layers[0];
+				const TileLayer &l1 = f.tiles[0].layers[1];
+
+				getExtrusionMesh(imesh, tsrc, tsrc->getTextureName(l0.texture_id),
+					tsrc->getTextureName(l1.texture_id), l0.has_color ? l0.color : imesh->base_color,
+					l1.has_color ? l1.color : imesh->base_color);
+				break;
+			}
+			case NDT_PLANTLIKE_ROOTED: {
+				//infostream << "Inv getOrCreateMesh(): 9" << std::endl;
+				const TileLayer &l0 = f.special_tiles[0].layers[0];
+
+				getExtrusionMesh(imesh, tsrc, tsrc->getTextureName(l0.texture_id), "",
+					l0.has_color ? l0.color : imesh->base_color);
+				break;
+			}
+			default: {
+				//infostream << "Inv getOrCreateMesh(): 10" << std::endl;
+				getSpecialNodeMesh(imesh, client, ndef->getId(def.name), def.place_param2);
+				//infostream << "Inv getOrCreateMesh(): 10.1" << std::endl;
+				scaleMesh(imesh->mesh, v3f(0.12f));
+				//infostream << "Inv getOrCreateMesh(): 10.2" << std::endl;
+				break;
+			}}
+
+			//infostream << "Inv getOrCreateMesh(): 10.3" << std::endl;
+			rotateMeshXZby(imesh->mesh, -45);
+			//infostream << "Inv getOrCreateMesh(): 10.4" << std::endl;
+			rotateMeshYZby(imesh->mesh, -30);
+		}
+
+		//infostream << "Inv getOrCreateMesh(): 11" << std::endl;
+		for (u32 i = 0; i < imesh->mesh->getMeshBufferCount(); ++i) {
+			//infostream << "Inv getOrCreateMesh(): 11.1" << std::endl;
+			scene::IMeshBuffer *buf = imesh->mesh->getMeshBuffer(i);
+			//infostream << "Inv getOrCreateMesh(): 11.2" << std::endl;
+			video::SMaterial &material = buf->getMaterial();
+			//infostream << "Inv getOrCreateMesh(): 11.3" << std::endl;
+			material.MaterialType = video::EMT_TRANSPARENT_ALPHA_CHANNEL;
+			material.MaterialTypeParam = 0.5f;
+			material.forEachTexture([] (auto &tex) {
+				tex.MinFilter = video::ETMINF_NEAREST_MIPMAP_NEAREST;
+				tex.MagFilter = video::ETMAGF_NEAREST;
+			});
+			material.BackfaceCulling = f.needsBackfaceCulling();
+			material.Lighting = false;
+			//infostream << "Inv getOrCreateMesh(): 11.4" << std::endl;
+			buf->setDirty(scene::EBT_VERTEX);
+			if (imesh->needs_shading)
+				colorizeMeshBuffer(buf, &imesh->buffer_colors[i]);
+			else
+				setMeshBufferColor(buf, imesh->buffer_colors[i]);
+			//infostream << "Inv getOrCreateMesh(): 11.5" << std::endl;
+		}
+		//infostream << "Inv getOrCreateMesh(): 12" << std::endl;
+		if (imesh->mesh) {
+			imesh->mesh->setHardwareMappingHint(scene::EHM_DYNAMIC, scene::EBT_VERTEX);
+			imesh->mesh->setHardwareMappingHint(scene::EHM_STATIC, scene::EBT_INDEX);
+		}
+
+		m_cache[cache_key] = std::unique_ptr<ItemMesh>(imesh);
+		//infostream << "Inv getOrCreateMesh(): 13" << std::endl;
+		return imesh;
+	}
+
+protected:
+	virtual void getCubeMesh(ItemMesh *imesh, const ContentFeatures &f) override
+	{
+		imesh->mesh = MeshBuilder::createCubicMesh();
+
+		if (f.drawtype == NDT_FLOWINGLIQUID) {
+			scaleMesh(imesh->mesh, v3f(1.2f, 0.03f, 1.2f));
+			translateMesh(imesh->mesh, v3f(0.0f, -0.57f, 0.0f));
+		} else if (f.drawtype == NDT_ALLFACES) {
+			scaleMesh(imesh->mesh, v3f(f.visual_scale));
+		} else
+			scaleMesh(imesh->mesh, v3f(1.2f));
+
+		postProcessNodeMesh(imesh, f, false, false, true);
+	}
+
+	virtual void getExtrusionMesh(ItemMesh *imesh, ITextureSource *tsrc,
+		std::string image, std::string overlay_image, video::SColor color=video::SColor(0xFFFFFFFF),
+		video::SColor overlay_color=video::SColor(0xFFFFFFFF), u8 num_frames=1) override
+	{
+		video::ITexture *texture = tsrc->getTextureForMesh(image);
+
+		if (!texture)
+			return;
+
+		scene::SMesh *mesh = MeshBuilder::createExtrusionMesh(texture->getSize());
+		mesh->getMeshBuffer(0)->getMaterial().setTexture(0, texture);
+
+		if (!overlay_image.empty()) {
+			//imesh->overlay_texture = tsrc->getTexture(overlay_image);
+
+			scene::IMeshBuffer *clone_mbuf = cloneMeshBuffer(mesh->getMeshBuffer(0));
+			clone_mbuf->getMaterial().setTexture(0, tsrc->getTexture(overlay_image));
+			mesh->addMeshBuffer(clone_mbuf);
+			clone_mbuf->drop();
+		}
+
+		for (u32 layer = 0; layer < mesh->getMeshBufferCount(); layer++) {
+			video::SMaterial &material = mesh->getMeshBuffer(layer)->getMaterial();
+
+			material.TextureLayers[0].TextureWrapU = video::ETC_CLAMP_TO_EDGE;
+			material.TextureLayers[0].TextureWrapV = video::ETC_CLAMP_TO_EDGE;
+
+			material.BackfaceCulling = true;
+		}
+
+		//imesh->inventory_texture = tsrc->getTexture(image);
+		imesh->mesh = mesh;
+		imesh->buffer_colors.push_back(color);
+		imesh->buffer_colors.push_back(overlay_color);
+	}
+
+private:
+	// The id of the thread that is allowed to use irrlicht directly
+	std::thread::id m_main_thread;
+
+	std::unordered_map<std::string, std::unique_ptr<ItemMesh>> m_cache;
+};
+#endif
 
 /*
 	CItemDefManager
@@ -371,34 +571,9 @@ void ItemDefinition::deSerialize(std::istream &is, u16 protocol_version)
 
 class CItemDefManager: public IWritableItemDefManager
 {
-#ifndef SERVER
-	struct ClientCached
-	{
-		video::ITexture *inventory_texture;
-		ItemMesh wield_mesh;
-		Palette *palette;
-
-		ClientCached():
-			inventory_texture(NULL),
-			palette(NULL)
-		{}
-
-		~ClientCached() {
-			if (wield_mesh.mesh)
-				wield_mesh.mesh->drop();
-		}
-
-		DISABLE_CLASS_COPY(ClientCached);
-	};
-#endif
-
 public:
 	CItemDefManager()
 	{
-
-#ifndef SERVER
-		m_main_thread = std::this_thread::get_id();
-#endif
 		clear();
 	}
 
@@ -445,75 +620,9 @@ public:
 		// Get the definition
 		return m_item_definitions.find(name) != m_item_definitions.cend();
 	}
+
 #ifndef SERVER
-public:
-	ClientCached* createClientCachedDirect(const ItemStack &item, Client *client) const
-	{
-		// This is not thread-safe
-		sanity_check(std::this_thread::get_id() == m_main_thread);
-
-		const ItemDefinition &def = item.getDefinition(this);
-		std::string inventory_image = item.getInventoryImage(this);
-		std::string inventory_overlay = item.getInventoryOverlay(this);
-		std::string cache_key = def.name;
-		if (!inventory_image.empty())
-			cache_key += "/" + inventory_image;
-		if (!inventory_overlay.empty())
-			cache_key += ":" + inventory_overlay;
-
-		// Skip if already in cache
-		auto it = m_clientcached.find(cache_key);
-		if (it != m_clientcached.end())
-			return it->second.get();
-
-		infostream << "Lazily creating item texture and mesh for \""
-				<< cache_key << "\"" << std::endl;
-
-		ITextureSource *tsrc = client->getTextureSource();
-
-		// Create new ClientCached
-		auto cc = std::make_unique<ClientCached>();
-
-		cc->inventory_texture = NULL;
-		if (!inventory_image.empty())
-			cc->inventory_texture = tsrc->getTexture(inventory_image);
-		getItemMesh(client, item, &(cc->wield_mesh));
-
-		cc->palette = tsrc->getPalette(def.palette_image);
-
-		// Put in cache
-		ClientCached *ptr = cc.get();
-		m_clientcached[cache_key] = std::move(cc);
-		return ptr;
-	}
-
-	// Get item inventory texture
-	virtual video::ITexture* getInventoryTexture(const ItemStack &item,
-			Client *client) const
-	{
-		ClientCached *cc = createClientCachedDirect(item, client);
-		if (!cc)
-			return nullptr;
-		return cc->inventory_texture;
-	}
-
-	// Get item wield mesh
-	virtual ItemMesh* getWieldMesh(const ItemStack &item, Client *client) const
-	{
-		ClientCached *cc = createClientCachedDirect(item, client);
-		if (!cc)
-			return nullptr;
-		return &(cc->wield_mesh);
-	}
-
-	// Get item palette
-	virtual Palette* getPalette(const ItemStack &item, Client *client) const
-	{
-		ClientCached *cc = createClientCachedDirect(item, client);
-		if (!cc)
-			return nullptr;
-		return cc->palette;
-	}
+	virtual MeshCacheManager* getMeshManager() override { return &m_mesh_mgr; }
 
 	virtual video::SColor getItemstackColor(const ItemStack &stack,
 		Client *client) const
@@ -523,8 +632,11 @@ public:
 		video::SColor directcolor;
 		if (!colorstring.empty() && parseColorString(colorstring, directcolor, true))
 			return directcolor;
+
 		// See if there is a palette
-		Palette *palette = getPalette(stack, client);
+		auto tsrc = client->getTextureSource();
+		auto item_mgr = client->getItemDefManager();
+		Palette *palette = tsrc->getPalette(stack.getDefinition(item_mgr).palette_image);
 		const std::string &index = stack.metadata.getString("palette_index", 0);
 		if (palette && !index.empty())
 			return (*palette)[mystoi(index, 0, 255)];
@@ -676,10 +788,7 @@ private:
 	// Aliases
 	StringMap m_aliases;
 #ifndef SERVER
-	// The id of the thread that is allowed to use irrlicht directly
-	std::thread::id m_main_thread;
-	// Cached textures and meshes
-	mutable std::unordered_map<std::string, std::unique_ptr<ClientCached>> m_clientcached;
+	mutable InvMeshCacheManager m_mesh_mgr;
 #endif
 };
 

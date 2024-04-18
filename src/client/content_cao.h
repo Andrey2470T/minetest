@@ -27,11 +27,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "constants.h"
 #include <cassert>
 #include <memory>
+#include "client/hudmesh.h"
 
 class Camera;
 class Client;
 struct Nametag;
 struct MinimapMarker;
+class MeshHUDSceneNode;
 
 /*
 	SmoothTranslator
@@ -82,7 +84,7 @@ private:
 	aabb3f m_selection_box = aabb3f(-BS/3.,-BS/3.,-BS/3., BS/3.,BS/3.,BS/3.);
 	scene::IMeshSceneNode *m_meshnode = nullptr;
 	scene::IAnimatedMeshSceneNode *m_animated_meshnode = nullptr;
-	WieldMeshSceneNode *m_wield_meshnode = nullptr;
+	MeshHUDSceneNode *m_wield_meshnode = nullptr;
 	scene::IBillboardSceneNode *m_spritenode = nullptr;
 	scene::IDummyTransformationSceneNode *m_matrixnode = nullptr;
 	Nametag *m_nametag = nullptr;
