@@ -49,6 +49,11 @@ void WieldMeshHUDSceneNode::wield(const ItemStack &item)
 
 }
 
+void WieldMeshHUDSceneNode::step(f32 dtime)
+{
+	setMeshColor(m_client->getEnv().getLocalPlayer()->light_color);
+}
+
 /*static inline v2f dir(const v2f &pos_dist)
 {
 	f32 x = pos_dist.X - WIELDMESH_OFFSET_X;

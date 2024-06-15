@@ -36,6 +36,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <ICameraSceneNode.h>
 #include "client/localplayer.h"
 #include "client/camera.h"
+#include "hud.h"
 
 #define WIELD_SCALE_FACTOR 30.0
 #define WIELD_SCALE_FACTOR_EXTRUDED 40.0
@@ -194,29 +195,24 @@ ItemMesh* HUDMeshCacheManager::getOrCreateMesh(const ItemStack &item, Client *cl
 void HUDMeshCacheManager::getFileMesh(ItemMesh *imesh, std::string text,
 		std::vector<std::string> textures, Client *client)
 {
-	infostream << "getFileMesh(): 1" << std::endl;
 	imesh->mesh = client->getMesh(text);
-	infostream << "getFileMesh(): 2" << std::endl;
 
 	if (!(imesh->mesh))
 		return;
 	textures.resize(imesh->mesh->getMeshBufferCount());
-	infostream << "getFileMesh(): 3" << std::endl;
+
 	ITextureSource *tsrc = client->getTextureSource();
 	IShaderSource *shdrsrc = client->getShaderSource();
 	for (u32 i = 0; i < imesh->mesh->getMeshBufferCount(); i++) {
 		imesh->buffer_colors.emplace_back(video::SColor(0xFFFFFFFF));
-		infostream << "getFileMesh(): 4" << std::endl;
 		video::SMaterial &material = imesh->mesh->getMeshBuffer(i)->getMaterial();
 		material.setTexture(0, tsrc->getTextureForMesh(textures[i]));
-		infostream << "getFileMesh(): 5" << std::endl;
 		if (m_enable_shaders) {
 			u32 shader_id = shdrsrc->getShader("object_shader", TILE_MATERIAL_BASIC, NDT_NORMAL);
 			material.MaterialType = shdrsrc->getShaderInfo(shader_id).material;
 		}
 		else
 			material.MaterialType = video::EMT_TRANSPARENT_ALPHA_CHANNEL_REF;
-		infostream << "getFileMesh(): 6" << std::endl;
 		material.MaterialTypeParam = 0.5f;
 		material.BackfaceCulling = false;
 		material.forEachTexture([this] (auto &tex) {
@@ -224,25 +220,19 @@ void HUDMeshCacheManager::getFileMesh(ItemMesh *imesh, std::string text,
 				m_trilinear_filter, m_anisotropic_filter);
 		});
 	}
-	infostream << "getFileMesh(): 7" << std::endl;
 	if (m_enable_shaders)
 		imesh->mesh->setHardwareMappingHint(scene::EHM_STATIC);
 	else
 		imesh->mesh->setHardwareMappingHint(scene::EHM_DYNAMIC);
 
 	imesh->constant_scale = v3f(WIELD_SCALE_FACTOR);
-	//scaleMesh(imesh->mesh, imesh->constant_scale);
-	infostream << "getFileMesh(): 8" << std::endl;
 }
 
 void HUDMeshCacheManager::getCubeMesh(ItemMesh *imesh, const ContentFeatures &f)
 {
-	//infostream << "getCubeMesh(): 1" << std::endl;
 	imesh->mesh = MeshBuilder::createCubicMesh();
-	//infostream << "getCubeMesh(): 2" << std::endl;
 
 	postProcessNodeMesh(imesh, f, false, true, true);
-	//infostream << "getCubeMesh(): 3" << std::endl;
 }
 
 void HUDMeshCacheManager::getExtrusionMesh(ItemMesh *imesh, ITextureSource *tsrc, std::string image,
@@ -265,8 +255,6 @@ void HUDMeshCacheManager::getExtrusionMesh(ItemMesh *imesh, ITextureSource *tsrc
 	mesh->getMeshBuffer(0)->getMaterial().setTexture(0, texture);
 
 	if (!overlay_image.empty()) {
-		//imesh->overlay_texture = tsrc->getTexture(overlay_image);
-
 		scene::IMeshBuffer *clone_mbuf = cloneMeshBuffer(mesh->getMeshBuffer(0));
 		clone_mbuf->getMaterial().setTexture(0,tsrc->getTexture(overlay_image));
 		mesh->addMeshBuffer(clone_mbuf);
@@ -292,7 +280,6 @@ void HUDMeshCacheManager::getExtrusionMesh(ItemMesh *imesh, ITextureSource *tsrc
 			material.setTexture(2, tsrc->getShaderFlagsTexture(false));
 	}
 
-	//imesh->wield_texture = texture;
 	imesh->mesh = mesh;
 	imesh->buffer_colors.push_back(color);
 	imesh->buffer_colors.push_back(overlay_color);
@@ -303,16 +290,21 @@ void HUDMeshCacheManager::getExtrusionMesh(ItemMesh *imesh, ITextureSource *tsrc
  * MeshHUDSceneNode class
  */
 
-MeshHUDSceneNode::MeshHUDSceneNode(scene::ISceneManager *mgr, Client *client, bool lighting):
+MeshHUDSceneNode::MeshHUDSceneNode(scene::ISceneManager *mgr, Client *client, bool lighting, HudElement *elem):
 	scene::IMeshSceneNode(mgr->getRootSceneNode(), mgr, -1), m_client(client),
-	m_lighting(lighting)
+	m_lighting(lighting), m_hud_elem(elem)
 {
 	m_enable_shaders = g_settings->getBool("enable_shaders");
 
 	m_hud_mesh = m_client->getEnv().getMeshManager()->getOrCreateMesh(ItemStack(), m_client);
+	m_mesh_cached = true;
 	setScale(m_hud_mesh->constant_scale);
 
 	setAutomaticCulling(scene::EAC_OFF);
+
+	v2u32 size = RenderingEngine::getWindowSize();
+	m_original_rect = core::recti(0, 0, size.X, size.Y);
+	m_rect = m_original_rect;
 
 	m_shadow = RenderingEngine::get_shadow_renderer();
 
@@ -377,141 +369,192 @@ void MeshHUDSceneNode::render()
 	}
 }
 
-void MeshHUDSceneNode::setLightColor(video::SColor light_color)
+void MeshHUDSceneNode::setMeshColor(video::SColor light_color)
 {
 	scene::IMesh *mesh = m_hud_mesh->mesh;
 
 	if (!mesh)
 		return;
+
+	IShaderSource *shdrsrc = m_client->getShaderSource();
+
+	// Apply the light color to the buffers only if the vertex lighting is enabled
+	video::SColor buffer_light_color = (!m_lighting || m_enable_shaders) ? 0xFFFFFFFF : light_color;
+
 	for (u32 i = 0; i < mesh->getMeshBufferCount(); i++) {
 		video::SColor bc(m_hud_mesh->buffer_colors[i]);
 
-		bc.setRed(bc.getRed() * (m_lighting ? light_color.getRed() : 255) / 255);
-		bc.setGreen(bc.getGreen() * (m_lighting ? light_color.getGreen() : 255) / 255);
-		bc.setBlue(bc.getBlue() * (m_lighting ? light_color.getBlue() : 255) / 255);
+		bc.setRed(bc.getRed() * buffer_light_color.getRed() / 255);
+		bc.setGreen(bc.getGreen() * buffer_light_color.getGreen() / 255);
+		bc.setBlue(bc.getBlue() * buffer_light_color.getBlue() / 255);
 		bc.setAlpha(255);
 
 		scene::IMeshBuffer *buf = mesh->getMeshBuffer(i);
 		buf->setDirty(scene::EBT_VERTEX);
 
-		if (m_enable_shaders) {
+		video::SMaterial &mat = buf->getMaterial();
+
+		// No lighting at all. Only the hardware color is applied.
+		if (!m_lighting) {
+			mat.MaterialType = video::EMT_TRANSPARENT_ALPHA_CHANNEL_REF;
+
 			setMeshBufferColor(buf, bc);
-			buf->getMaterial().EmissiveColor = m_lighting ? light_color : video::SColor(0xFFFFFFFF);
 		}
-		else
-			colorizeMeshBuffer(buf, &bc);
+		else {
+			// Shader lighting
+			if (m_enable_shaders) {
+				setMeshBufferColor(buf, bc);
+
+				u32 shader_id = shdrsrc->getShader("object_shader", TILE_MATERIAL_BASIC, NDT_NORMAL);
+				mat.MaterialType = shdrsrc->getShaderInfo(shader_id).material;
+				mat.EmissiveColor = light_color;
+			}
+			// Vertex lighting
+			else {
+				colorizeMeshBuffer(buf, &bc);
+
+				mat.MaterialType = video::EMT_TRANSPARENT_ALPHA_CHANNEL_REF;
+				mat.EmissiveColor = video::SColor(0xFFFFFFFF);
+			}
+		}
 	}
 }
 
 void MeshHUDSceneNode::updateMesh(std::string text, std::vector<std::string> textures)
 {
-	if (m_last_text == text)
+	//if (m_last_text == text)
+	//	return;
+
+	//m_last_text = text;
+
+	if (!(m_hud_elem->change_flags & u8(MeshHUDStatsChange::TEXT)))
 		return;
 
-	m_last_text = text;
+	// Delete the mesh if it was non-cached before
+	if (!m_mesh_cached && m_hud_mesh)
+		delete m_hud_mesh;
 
 	HUDMeshCacheManager *mesh_mgr = m_client->getEnv().getMeshManager();
 	// Assume that the text string contains the itemstack name that is necessary to display
-	//infostream << "m_last_text: " << m_last_text << std::endl;
-	infostream << "updateMesh(): begin" << std::endl;
-	if (m_last_text.find(':') != m_last_text.npos) {
-		infostream << "updateMesh(): this is itemstack mesh" << std::endl;
-		//infostream << "this is itemstack" << std::endl;
-		m_hud_mesh = mesh_mgr->getOrCreateMesh(ItemStack(m_last_text, 1, 0, m_client->idef()), m_client);
+	if (text.find(':') != text.npos) {
+		m_hud_mesh = mesh_mgr->getOrCreateMesh(ItemStack(text, 1, 0, m_client->idef()), m_client);
 		m_mesh_cached = true;
 	}
 	// Else assume that it is a mesh file name
 	else {
-		infostream << "updateMesh(): this is mesh from file" << std::endl;
-		//infostream << "this is arbitrary mesh" << std::endl;
 		m_hud_mesh = new ItemMesh();
 		mesh_mgr->getFileMesh(m_hud_mesh, text, textures, m_client);
 		m_mesh_cached = false;
 	}
+
+	m_hud_elem->change_flags &= (~(u8)MeshHUDStatsChange::TEXT);
+
+	if (m_hud_elem->change_flags & u8(MeshHUDStatsChange::TEXS))
+		m_hud_elem->change_flags &= (~(u8)MeshHUDStatsChange::TEXS);
 }
 
-/*void MeshHUDSceneNode::step(f32 dtime, HUDMeshCacheManager *mesh_mgr)
+void MeshHUDSceneNode::updateRect()
 {
-	setLightColor(m_client->getEnv().getLocalPlayer()->light_color);
-
-	if (!m_hud_elem)
+	if (!(m_hud_elem->change_flags & u8(MeshHUDStatsChange::POS)))
 		return;
 
-	v3f cur_pos = getPosition();
-	v3f new_pos = calculateViewPos(m_hud_elem->pos);
-	new_pos.Z = m_hud_elem->z_offset;
-	//infostream << "new pos: X: " << new_pos.X << ", Y: " << new_pos.Y << std::endl;
+	//v2f uv_pos = m_scene_pos / 2.0f + 0.5f;
 
-	if (cur_pos != new_pos) {
-		//infostream << "set a new pos" << std::endl;
-		setPosition(new_pos);
-	}
+	//if (uv_pos == m_hud_elem->pos)
+	//	return;
 
-	if (getRotation() != m_hud_elem->rotation)
-		setRotation(m_hud_elem->rotation);
+	v2f screen_pos = (m_hud_elem->pos - 0.5f) * 2.0f;
 
-	// Relative scale
-	v3f old_relative_scale = m_last_relative_scale;
-	v3f new_scale(std::fabs(m_hud_elem->scale.X));
-	//infostream << "new_scale: X: " << new_scale.X << ", Y: " << new_scale.Y << ", Z: " << new_scale.Z << std::endl;
+	v2s32 new_pos(s32(screen_pos.X*m_original_rect.getWidth()/2.0f),
+		s32(screen_pos.Y*m_original_rect.getHeight()/2.0f));
 
-	switch (m_hud_elem->dir) {
+	m_rect = m_original_rect + new_pos;
+
+	m_hud_elem->change_flags &= (~(u8)MeshHUDStatsChange::POS);
+}
+
+void MeshHUDSceneNode::updateScale()
+{
+	if (m_hud_elem->change_flags & u8(MeshHUDStatsChange::DIR)) {
+		switch (m_hud_elem->dir) {
 		case 0:
-			new_scale.X *= 1;
+			m_last_dir.X *= 1;
 			break;
 		case 1:
-			new_scale.X *= -1;
+			m_last_dir.X *= -1;
 			break;
 		case 2:
-			new_scale.Y *= -1;
+			m_last_dir.Y *= -1;
 			break;
 		case 3:
-			new_scale.Y *= 1;
+			m_last_dir.Y *= 1;
 			break;
 		default:
 			break;
-	}
-	m_last_relative_scale = new_scale;
-
-	v3f old_constant_scale = m_hud_mesh->constant_scale;
-	//infostream << "old_constant_scale: X: " << old_constant_scale.X << ", Y: " << old_constant_scale.Y << ", Z: " << old_constant_scale.Z << std::endl;
-
-	if (m_last_text != m_hud_elem->text) {
-		m_last_text = m_hud_elem->text;
-
-		//delete m_hud_mesh;
-
-		// Assume that the text string contains the itemstack name that is necessary to display
-		infostream << "m_last_text: " << m_last_text << std::endl;
-		if (m_last_text.find(':') != m_last_text.npos) {
-			infostream << "this is itemstack" << std::endl;
-			m_hud_mesh = mesh_mgr->getOrCreateMesh(ItemStack(m_last_text, 1, 0, m_client->idef()), m_client);
-			m_mesh_cached = true;
 		}
-		// Else assume that it is a mesh file name
-		else {
-			infostream << "this is arbitrary mesh" << std::endl;
-			m_hud_mesh = new ItemMesh();
-			mesh_mgr->getFileMesh(m_hud_mesh, m_hud_elem, m_client);
-			m_mesh_cached = false;
-		}
+
+		m_hud_elem->change_flags &= (~(u8)MeshHUDStatsChange::DIR);
 	}
 
-	if (m_hud_mesh->constant_scale != old_constant_scale ||
-			m_last_relative_scale != old_relative_scale)
-		setScale(m_hud_mesh->constant_scale * m_last_relative_scale);
+	if (m_hud_elem->change_flags & u8(MeshHUDStatsChange::SCALE)) {
+		m_last_relative_scale = v3f(std::fabs(m_hud_elem->scale.X));
+
+		m_hud_elem->change_flags &= (~(u8)MeshHUDStatsChange::SCALE);
+	}
+
+	setScale(m_hud_mesh->constant_scale * m_last_relative_scale * m_last_dir);
+}
+
+void MeshHUDSceneNode::updateTextures()
+{
+	if (!(m_hud_elem->change_flags & u8(MeshHUDStatsChange::TEXS)))
+		return;
+
+	ITextureSource *tsrc = m_client->getTextureSource();
+
+	for (u32 i = 0; i < m_hud_elem->textures.size(); i++) {
+		video::SMaterial &mat = m_hud_mesh->mesh->getMeshBuffer(i)->getMaterial();
+
+		mat.setTexture(0, tsrc->getTextureForMesh(m_hud_elem->textures[i]));
+	}
+
+	m_hud_elem->change_flags &= (~(u8)MeshHUDStatsChange::TEXS);
+}
+
+void MeshHUDSceneNode::updateRotation()
+{
+	if (!(m_hud_elem->change_flags & u8(MeshHUDStatsChange::ROT)))
+		return;
+
+	setRotation(m_hud_elem->rotation);
+
+	m_hud_elem->change_flags &= (~(u8)MeshHUDStatsChange::ROT);
+}
+
+void MeshHUDSceneNode::step(f32 dtime)
+{
+	setMeshColor(m_client->getEnv().getLocalPlayer()->light_color);
+
+	updateRect();
+
+	updateRotation();
+
+	updateScale();
+
+	updateMesh(m_hud_elem->text, m_hud_elem->textures);
+
+	updateTextures();
 
 	m_lighting = m_hud_elem->lighting;
-}*/
-
+}
 
 /*
  * HUDScene class
  */
 HUDScene::HUDScene(scene::ISceneManager *mgr, Client *client,
-		const HudElement *elem, const v3f &mesh_pos,
+		HudElement *elem, const v3f &mesh_pos,
 		const v3f &mesh_rot, bool lighting, bool is_hand)
-	: m_client(client), m_hud_elem(elem)
+	: m_client(client)
 {
 	m_smgr = mgr->createNewSceneManager(false);
 
@@ -522,7 +565,7 @@ HUDScene::HUDScene(scene::ISceneManager *mgr, Client *client,
 	m_cam->setFarValue(1000);
 
 	if (!is_hand)
-		m_hud_node = new MeshHUDSceneNode(m_smgr, client, lighting);
+		m_hud_node = new MeshHUDSceneNode(m_smgr, client, lighting, elem);
 	else
 		m_hud_node = new WieldMeshHUDSceneNode(m_smgr, client, lighting);
 	v3f pos = mesh_pos;
@@ -530,119 +573,9 @@ HUDScene::HUDScene(scene::ISceneManager *mgr, Client *client,
 	pos.Z = 65.0f;
 	m_hud_node->setPosition(pos);
 	m_hud_node->setRotation(mesh_rot);
-
-	v2u32 size = RenderingEngine::getWindowSize();
-	m_original_rect = core::recti(0, 0, size.X, size.Y);
-	m_rect = m_original_rect;
-	//m_constant_ul_crn = v2s32(-(s32)size.X/2, (s32)size.Y/2);
-
-	//m_render_texture_size = core::dimension2du(size.X, size.Y);
-	//m_original_rect = core::recti(core::dimension2di(size.X, size.Y));
-	//m_rect = m_original_rect;
-
-	//infostream << "size: " << m_original_rect.getWidth() << ", " << m_original_rect.getHeight() << std::endl;
 }
 
 HUDScene::~HUDScene()
 {
 	m_smgr->drop();
 }
-
-void HUDScene::updateRect()
-{
-	v2f uv_pos = m_scene_pos / 2.0f + 0.5f;
-
-	//infostream << "uv_pos: " << uv_pos.X << ", " << uv_pos.Y << std::endl;
-	//infostream << "pos: " << m_hud_elem->pos.X << ", " << m_hud_elem->pos.Y << std::endl;
-
-	if (uv_pos == m_hud_elem->pos)
-		return;
-
-	m_scene_pos = (m_hud_elem->pos - 0.5f) * 2.0f;
-	//infostream << "scene pos: " << m_scene_pos.X << ", " << m_scene_pos.Y << std::endl;
-
-	v2s32 new_pos(s32(m_scene_pos.X*m_original_rect.getWidth()/2.0f),
-		s32(m_scene_pos.Y*m_original_rect.getHeight()/2.0f));
-
-	//infostream << "new pos: " << new_pos.X << ", " << new_pos.Y << std::endl;
-
-	m_rect = m_original_rect + new_pos;
-	//m_ul_crn_shift = m_constant_ul_crn + new_pos;
-	//infostream << "ul crn shift: " << m_ul_crn_shift.X << ", " << m_ul_crn_shift.Y << std::endl;
-}
-
-void HUDScene::updateScale()
-{
-	v3f new_scale(std::fabs(m_hud_elem->scale.X));
-
-	switch (m_hud_elem->dir) {
-		case 0:
-			new_scale.X *= 1;
-			break;
-		case 1:
-			new_scale.X *= -1;
-			break;
-		case 2:
-			new_scale.Y *= -1;
-			break;
-		case 3:
-			new_scale.Y *= 1;
-			break;
-		default:
-			break;
-	}
-
-	if (m_hud_node->getConstantMeshScale() != m_last_constant_scale ||
-			new_scale != m_last_relative_scale) {
-		m_last_constant_scale = m_hud_node->getConstantMeshScale();
-		m_last_relative_scale = new_scale;
-
-		m_hud_node->setScale(m_last_constant_scale * m_last_relative_scale);
-	}
-}
-
-void HUDScene::step(f32 dtime)
-{
-	m_hud_node->setLightColor(m_client->getEnv().getLocalPlayer()->light_color);
-
-	if (!m_hud_elem)
-		return;
-
-	updateRect();
-
-	m_hud_node->setRotation(m_hud_elem->rotation);
-
-	updateScale();
-	//infostream << "old_constant_scale: X: " << old_constant_scale.X << ", Y: " << old_constant_scale.Y << ", Z: " << old_constant_scale.Z << std::endl;
-
-	m_hud_node->updateMesh(m_hud_elem->text, m_hud_elem->textures);
-
-	m_hud_node->setLighting(m_hud_elem->lighting);
-}
-
-/*v3f HUDScene::calculateViewPos(v2f screen_pos)
-{
-	v2f device_coords = (screen_pos - 0.5) * 2.0;
-	infostream << "device_coords: x: " << device_coords.X << ", y: " << device_coords.Y << std::endl;
-
-	f32 pos_to_v[4] = {device_coords.X, device_coords.Y, 0.0, 1.0};
-
-	scene::ICameraSceneNode *cam = getSceneManager()->getActiveCamera();
-	core::matrix4 proj = cam->getProjectionMatrix();
-	core::matrix4 projinv;
-	proj.getInverse(projinv);
-
-	core::matrix4 view = cam->getViewMatrix();
-	core::matrix4 viewinv;
-	view.getInverse(viewinv);
-
-	core::matrix4 projviewinv = projinv * viewinv;
-
-	projviewinv.multiplyWith1x4Matrix(pos_to_v);
-
-	return v3f(
-		pos_to_v[0] / pos_to_v[3],
-		pos_to_v[1] / pos_to_v[3],
-		pos_to_v[2] / pos_to_v[3]
-	);
-}*/

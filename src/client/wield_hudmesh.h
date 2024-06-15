@@ -43,8 +43,9 @@ public:
 	// Replace the wielded item mesh
 	void wield(const ItemStack &item);
 
-	inline void addArmInertia(f32 player_yaw);
+	//inline void addArmInertia(f32 player_yaw);
 
+	virtual void step(f32 dtime);
 private:
 	Camera *m_camera;
 

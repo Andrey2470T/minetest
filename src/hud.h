@@ -102,6 +102,16 @@ enum HudCompassDir {
 	HUD_COMPASS_TRANSLATE_REVERSE,
 };
 
+enum class MeshHUDStatsChange : u8 {
+	POS 		= 0b0000'0001,
+	SCALE 		= 0b0000'0010,
+	TEXT		= 0b0000'0100,
+	DIR			= 0b0000'1000,
+	Z_OFFSET	= 0b0001'0000,
+	ROT			= 0b0010'0000,
+	TEXS		= 0b0100'0000
+};
+
 struct HudElement {
 	HudElementType type;
 	v2f pos;
@@ -124,6 +134,7 @@ struct HudElement {
 	std::vector<std::string> textures;
 	bool lighting;
 	u32 parent = 0;
+	u8 change_flags = 0;
 };
 
 extern const EnumString es_HudElementType[];

@@ -98,7 +98,7 @@ public:
 
 	void drawLuaElements(const v3s16 &camera_offset);
 
-	void addHUDScene(u32 hud_id, const HudElement &elem);
+	void addHUDScene(u32 hud_id, HudElement &elem);
 	void removeHUDScene(u32 hud_id);
 
 	WieldMeshHUDSceneNode* getWieldMeshNode() {

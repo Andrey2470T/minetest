@@ -163,41 +163,33 @@ scene::SMesh* MeshBuilder::createSpecialNodeMesh(Client *client, content_t id, c
 void MeshCacheManager::getSpecialNodeMesh(ItemMesh *imesh, Client *client,
 	content_t id, const std::optional<u8> &place_param2)
 {
-	//infostream << "getSpecialNodeMesh(): 1" << std::endl;
 	imesh->mesh = MeshBuilder::createSpecialNodeMesh(client, id, place_param2);
-	//infostream << "getSpecialNodeMesh(): 2" << std::endl;
 
 	auto ndef = client->getNodeDefManager();
 	const ContentFeatures &f = ndef->get(id);
 
-	//infostream << "getSpecialNodeMesh(): 3" << std::endl;
 	for (int layer = 0; layer < MAX_TILE_LAYERS; layer++)
 		for (const auto &tile : f.tiles) {
 			const TileLayer &l = tile.layers[layer];
 			imesh->buffer_colors.push_back(l.has_color ? l.color : imesh->base_color);
 		}
-	//infostream << "getSpecialNodeMesh(): 4" << std::endl;
 }
 
 void MeshCacheManager::postProcessNodeMesh(ItemMesh *imesh, const ContentFeatures &f, bool use_shaders,
 		bool set_material, bool apply_scale)
 {
-	//infostream << "postProcessNodeMesh(): 1" << std::endl;
 	scene::SMesh *smesh = dynamic_cast<scene::SMesh*>(imesh->mesh);
-	//infostream << "postProcessNodeMesh(): 2" << std::endl;
 
-		//infostream << "postProcessNodeMesh(): smesh is invalid" << std::endl;
-	//infostream << "postProcessNodeMesh(): 2.1" << std::endl;
 	for (u32 i = 0; i < smesh->getMeshBufferCount(); ++i) {
-		//infostream << "postProcessNodeMesh(): 2.2" << std::endl;
+
 		scene::IMeshBuffer *buf = smesh->getMeshBuffer(i);
-		//infostream << "postProcessNodeMesh(): 3" << std::endl;
+
 		for (int layernum = 0; layernum < MAX_TILE_LAYERS; layernum++) {
-			//infostream << "postProcessNodeMesh(): 4" << std::endl;
+
 			const TileLayer &layer = f.tiles[i].layers[layernum];
 			if (layer.texture_id == 0)
 				continue;
-			//infostream << "postProcessNodeMesh(): 5" << std::endl;
+
 			if (layernum != 0) {
 				scene::IMeshBuffer *copy = cloneMeshBuffer(buf);
 				copy->getMaterial() = buf->getMaterial();
@@ -205,7 +197,7 @@ void MeshCacheManager::postProcessNodeMesh(ItemMesh *imesh, const ContentFeature
 				copy->drop();
 				buf = copy;
 			}
-			//infostream << "postProcessNodeMesh(): 6" << std::endl;
+
 			imesh->buffer_colors.push_back(layer.has_color ? layer.color : imesh->base_color);
 
 			video::SMaterial &material = buf->getMaterial();
@@ -228,14 +220,12 @@ void MeshCacheManager::postProcessNodeMesh(ItemMesh *imesh, const ContentFeature
 				}
 				material.setTexture(2, layer.flags_texture);
 			}
-			//infostream << "postProcessNodeMesh(): 8" << std::endl;
+
 			if (apply_scale && f.tiles[i].world_aligned) {
 				u32 n = buf->getVertexCount();
 				for (u32 k = 0; k != n; ++k)
 					buf->getTCoords(k) /= layer.scale;
 			}
-			//infostream << "postProcessNodeMesh(): 9" << std::endl;
 		}
 	}
-	//infostream << "postProcessNodeMesh(): 10" << std::endl;
 }

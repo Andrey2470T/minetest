@@ -1743,7 +1743,7 @@ void Server::SendHUDAdd(session_t peer_id, u32 id, HudElement *form)
 	for (const std::string &texture : form->textures)
 		pkt << texture;
 
-	pkt << form->lighting << form->parent;
+	pkt << form->lighting << form->parent << form->change_flags;
 
 	Send(&pkt);
 }
@@ -1755,7 +1755,7 @@ void Server::SendHUDRemove(session_t peer_id, u32 id)
 	Send(&pkt);
 }
 
-void Server::SendHUDChange(session_t peer_id, u32 id, HudElementStat stat, void *value)
+void Server::SendHUDChange(session_t peer_id, u32 id, HudElementStat stat, void *value, u8 change_flags)
 {
 	NetworkPacket pkt(TOCLIENT_HUDCHANGE, 0, peer_id);
 	pkt << id << (u8) stat;
@@ -1799,6 +1799,7 @@ void Server::SendHUDChange(session_t peer_id, u32 id, HudElementStat stat, void 
 			pkt << *(u32 *) value;
 			break;
 	}
+	pkt << change_flags;
 
 	Send(&pkt);
 }
@@ -3410,12 +3411,12 @@ bool Server::hudRemove(RemotePlayer *player, u32 id) {
 	return true;
 }
 
-bool Server::hudChange(RemotePlayer *player, u32 id, HudElementStat stat, void *data)
+bool Server::hudChange(RemotePlayer *player, u32 id, HudElementStat stat, void *data, u8 change_flags)
 {
 	if (!player)
 		return false;
 
-	SendHUDChange(player->getPeerId(), id, stat, data);
+	SendHUDChange(player->getPeerId(), id, stat, data, change_flags);
 	return true;
 }
 

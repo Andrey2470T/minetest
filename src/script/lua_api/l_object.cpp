@@ -1686,7 +1686,7 @@ int ObjectRef::l_hud_add(lua_State *L)
 	}
 
 	u32 id = getServer(L)->hudAdd(player, elem);
-	infostream << "hud id :" << id << std::endl;
+
 	if (id == U32_MAX) {
 		delete elem;
 		return 0;
@@ -1744,7 +1744,7 @@ int ObjectRef::l_hud_change(lua_State *L)
 				throw LuaError("Can not attach the mesh HUD to the parent one of non-mesh type!");
 		}
 
-		getServer(L)->hudChange(player, id, stat, value);
+		getServer(L)->hudChange(player, id, stat, value, elem->change_flags);
 	}
 
 	lua_pushboolean(L, ok);

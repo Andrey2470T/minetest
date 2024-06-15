@@ -1180,6 +1180,7 @@ void Client::handleCommand_HudAdd(NetworkPacket* pkt)
 	std::vector<std::string> textures;
 	bool lighting;
 	u32 parent;
+	u8 change_flags;
 
 	*pkt >> server_id >> type >> pos >> name >> scale >> text >> number >> item
 		>> dir >> align >> offset;
@@ -1199,7 +1200,7 @@ void Client::handleCommand_HudAdd(NetworkPacket* pkt)
 		textures.push_back(texture);
 	}
 
-	*pkt >> lighting >> parent;
+	*pkt >> lighting >> parent >> change_flags;
 
 	ClientEvent *event = new ClientEvent();
 	event->type              = CE_HUDADD;
@@ -1225,6 +1226,7 @@ void Client::handleCommand_HudAdd(NetworkPacket* pkt)
 	event->hudadd->textures  = textures;
 	event->hudadd->lighting  = lighting;
 	event->hudadd->parent    = parent;
+	event->hudadd->change_flags = change_flags;
 	m_client_event_queue.push(event);
 }
 
@@ -1252,6 +1254,7 @@ void Client::handleCommand_HudChange(NetworkPacket* pkt)
 	bool booldata;
 	u32 server_id;
 	u8 stat;
+	u8 change_flags;
 
 	*pkt >> server_id >> stat;
 
@@ -1302,6 +1305,7 @@ void Client::handleCommand_HudChange(NetworkPacket* pkt)
 			*pkt >> intdata;
 			break;
 	}
+	*pkt >> change_flags;
 
 	ClientEvent *event = new ClientEvent();
 	event->type                 = CE_HUDCHANGE;
@@ -1316,6 +1320,7 @@ void Client::handleCommand_HudChange(NetworkPacket* pkt)
 	event->hudchange->fdata     = fdata;
 	event->hudchange->vsdata    = vsdata;
 	event->hudchange->booldata  = booldata;
+	event->hudchange->change_flags = change_flags;
 	m_client_event_queue.push(event);
 }
 

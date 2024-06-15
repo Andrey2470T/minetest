@@ -167,17 +167,13 @@ Hud::~Hud()
 	if (m_selection_mesh)
 		m_selection_mesh->drop();
 
-	for (const auto &p : m_hud_scenes) {
-		infostream << "Hud::~Hud() 1" << std::endl;
+	for (const auto &p : m_hud_scenes)
 		p.second->drop();
-		infostream << "Hud::~Hud() 2" << std::endl;
-	}
 }
 
 void Hud::drawItem(const ItemStack &item, const core::rect<s32>& rect,
 		bool selected)
 {
-	//infostream << "drawItem(): 1" << std::endl;
 	if (selected) {
 		/* draw highlighting around selected item */
 		if (use_hotbar_selected_image) {
@@ -244,14 +240,11 @@ void Hud::drawItem(const ItemStack &item, const core::rect<s32>& rect,
 			*/
 		}
 	}
-	//infostream << "drawItem(): 2" << std::endl;
 	video::SColor bgcolor2(128, 0, 0, 0);
 	if (!use_hotbar_image)
 		driver->draw2DRectangle(bgcolor2, rect, NULL);
-	//infostream << "drawItem(): 3" << std::endl;
 	drawItemStack(driver, g_fontengine->getFont(), item, rect, NULL,
 		client, selected ? IT_ROT_SELECTED : IT_ROT_NONE);
-	//infostream << "drawItem(): 4" << std::endl;
 }
 
 // NOTE: selectitem = 0 -> no selected; selectitem is 1-based
@@ -591,70 +584,34 @@ void Hud::drawMeshes()
 	core::recti oldViewPort = driver->getViewPort();
 
 	for (const auto &p : m_hud_scenes) {
-		//driver->setRenderTarget(m_hud_render_textures[p.first], video::ECBF_COLOR, video::SColor(0,0,0,0));
-
-		driver->setViewPort(p.second->getViewPortRect());
+		driver->setViewPort(p.second->getMeshNode()->getViewPortRect());
 		p.second->getSceneManager()->drawAll();
-
-		//driver->setRenderTarget(nullptr, video::ECBF_COLOR);
-
-		//infostream << "drawMeshes(): coords " << p.second->getULCrnShift().X << ", " << p.second->getULCrnShift().Y << std::endl;
-		//const core::dimension2d<u32> &size = m_hud_render_textures[p.first]->getSize();
-		//infostream << "drawMeshes(): size " << size.Width << ", " <<  size.Height << std::endl;
-		//driver->draw2DImage(m_hud_render_textures[p.first],
-		//	p.second->getULCrnShift());
-		//infostream << "mesh hud id: " << p.first << std::endl;
-		//core::recti rect = p.second->getRect();
-		//infostream << "view port: (1) p1: " << rect.UpperLeftCorner.X << ", " << rect.UpperLeftCorner.Y << ", p2: " << rect.LowerRightCorner.X << ", " << rect.LowerRightCorner.Y << std::endl;
-		//driver->setViewPort(p.second->getRect());
-		//core::recti r = driver->getViewPort();
-		//p.second->getSceneManager()->getActiveCamera()->setAspectRatio((f32)cur_rect.getWidth() / (f32)cur_rect.getHeight());
-		//infostream << "view port: (2) p1: " << r.UpperLeftCorner.X << ", " << r.UpperLeftCorner.Y << ", p2: " << r.LowerRightCorner.X << ", " << r.LowerRightCorner.Y << std::endl;
-
-		//p.second->getSceneManager()->drawAll();
 	}
 
 	driver->setViewPort(oldViewPort);
 }
 
 
-void Hud::addHUDScene(u32 hud_id, const HudElement &elem)
+void Hud::addHUDScene(u32 hud_id, HudElement &elem)
 {
-	infostream << "addMeshHUDSceneNode() : 1" << std::endl;
 	auto i = m_hud_scenes.find(hud_id);
 	if (i != m_hud_scenes.end())
 		return;
-	infostream << "addMeshHUDSceneNode() : 2" << std::endl;
 
 	HUDScene *new_hud_scene = new HUDScene(
 		client->getSceneManager(), client, &elem);
 	m_hud_scenes.emplace(hud_id, new_hud_scene);
-
-	//auto render_tex_size = new_hud_scene->getRenderTextureSize();
-	//m_hud_render_textures.emplace(hud_id, driver->addRenderTargetTexture(
-	//	render_tex_size, io::path("HUDMeshRTT") + io::path(hud_id), video::ECF_A8R8G8B8
-	//));
-	infostream << "addMeshHUDSceneNode() : 3" << std::endl;
 }
 
 void Hud::removeHUDScene(u32 hud_id)
 {
 	auto i = m_hud_scenes.find(hud_id);
 
-	infostream << "remove id: " << hud_id << std::endl;
 	if (i != m_hud_scenes.end()) {
-		infostream << "remove 1" << std::endl;
-		if (m_hud_scenes[hud_id]) {
-			infostream << "remove 1.1" << std::endl;
+		if (m_hud_scenes[hud_id])
 			m_hud_scenes[hud_id]->drop();
-		}
 
-		infostream << "remove 2" << std::endl;
 		m_hud_scenes.erase(hud_id);
-		infostream << "remove 3" << std::endl;
-
-		//driver->removeTexture(m_hud_render_textures[hud_id]);
-		//m_hud_render_textures.erase(hud_id);
 	}
 }
 
@@ -1137,7 +1094,6 @@ void drawItemStack(
 		const v3s16 &angle,
 		const v3s16 &rotation_speed)
 {
-	//infostream << "drawItemStack(): 1" << std::endl;
 	static MeshTimeInfo rotation_time_infos[IT_ROT_NONE];
 
 	if (item.empty()) {
@@ -1146,7 +1102,6 @@ void drawItemStack(
 		}
 		return;
 	}
-	//infostream << "drawItemStack(): 2" << std::endl;
 	const bool enable_animations = g_settings->getBool("inventory_items_animations");
 
 	auto *idef = client->idef();
@@ -1156,25 +1111,22 @@ void drawItemStack(
 
 	const std::string inventory_image = item.getInventoryImage(idef);
 	const std::string inventory_overlay = item.getInventoryOverlay(idef);
-	//infostream << "drawItemStack(): 3" << std::endl;
+
 	auto *mesh_mgr = idef->getMeshManager();
-	//infostream << "drawItemStack(): 4" << std::endl;
+
 	bool has_mesh = false;
 	ItemMesh *imesh;
 
 	core::rect<s32> viewrect = rect;
 	if (clip != nullptr)
 		viewrect.clipAgainst(*clip);
-	//infostream << "drawItemStack(): name: " << def.name << std::endl;
+
 	// Render as mesh if animated or no inventory image
 	if ((enable_animations && rotation_kind < IT_ROT_NONE) || inventory_image.empty()) {
-		//infostream << "drawItemStack(): 5.1" << std::endl;
 		imesh = mesh_mgr->getOrCreateMesh(item, client);
-		//infostream << "drawItemStack(): 5.2" << std::endl;
 		has_mesh = imesh && imesh->mesh;
-		//infostream << "drawItemStack(): 5.3" << std::endl;
 	}
-	//infostream << "drawItemStack(): 6" << std::endl;
+
 	if (has_mesh) {
 		scene::IMesh *mesh = imesh->mesh;
 		driver->clearBuffers(video::ECBF_DEPTH);
@@ -1188,7 +1140,7 @@ void drawItemStack(
 				delta = porting::getDeltaMs(ti.time, porting::getTimeMs()) % 100000;
 			}
 		}
-		//infostream << "drawItemStack(): 7" << std::endl;
+
 		core::rect<s32> oldViewPort = driver->getViewPort();
 		core::matrix4 oldProjMat = driver->getTransform(video::ETS_PROJECTION);
 		core::matrix4 oldViewMat = driver->getTransform(video::ETS_VIEW);
@@ -1228,7 +1180,7 @@ void drawItemStack(
 
 		driver->setTransform(video::ETS_WORLD, matrix);
 		driver->setViewPort(viewrect);
-		//infostream << "drawItemStack(): 8" << std::endl;
+
 		for (u32 j = 0; j < mesh->getMeshBufferCount(); ++j) {
 			scene::IMeshBuffer *buf = mesh->getMeshBuffer(j);
 
@@ -1238,34 +1190,27 @@ void drawItemStack(
 			driver->setMaterial(material);
 			driver->drawMeshBuffer(buf);
 		}
-		//infostream << "drawItemStack(): 9" << std::endl;
+
 		driver->setTransform(video::ETS_VIEW, oldViewMat);
 		driver->setTransform(video::ETS_PROJECTION, oldProjMat);
 		driver->setViewPort(oldViewPort);
 
 		draw_overlay = def.type == ITEM_NODE && inventory_image.empty();
 	} else { // Otherwise just draw as 2D
-		//infostream << "drawItemStack(): 10" << std::endl;
-		//imesh = mesh_mgr->getOrCreateMesh(item, client);
-		//infostream << "drawItemStack(): 10.1" << std::endl;
-
 		video::ITexture *texture = client->getTextureSource()->getTexture(inventory_image);
-		//infostream << "drawItemStack(): 10.2" << std::endl;
+
 		video::SColor color;
-		if (texture) {
-			//infostream << "drawItemStack(): 11" << std::endl;
+		if (texture)
 			color = idef->getItemstackColor(item, client);
-		} else {
-			//infostream << "drawItemStack(): 12" << std::endl;
+		else {
 			color = video::SColor(255, 255, 255, 255);
 			ITextureSource *tsrc = client->getTextureSource();
 			texture = tsrc->getTexture("no_texture.png");
-			//infostream << "drawItemStack(): 13" << std::endl;
+
 			if (!texture)
 				return;
-			//infostream << "drawItemStack(): 14" << std::endl;
 		}
-		//infostream << "drawItemStack(): 15" << std::endl;
+
 		const video::SColor colors[] = { color, color, color, color };
 
 		draw2DImageFilterScaled(driver, texture, rect,
@@ -1273,7 +1218,6 @@ void drawItemStack(
 			clip, colors, true);
 
 		draw_overlay = true;
-		//infostream << "drawItemStack(): 16" << std::endl;
 	}
 
 	// draw the inventory_overlay
@@ -1284,7 +1228,6 @@ void drawItemStack(
 		core::rect<s32> srcrect(0, 0, dimens.Width, dimens.Height);
 		draw2DImageFilterScaled(driver, overlay_texture, rect, srcrect, clip, 0, true);
 	}
-	//infostream << "drawItemStack(): 17" << std::endl;
 	if (def.type == ITEM_TOOL && item.wear != 0) {
 		// Draw a progressbar
 		float barheight = static_cast<float>(rect.getHeight()) / 16;
@@ -1334,7 +1277,7 @@ void drawItemStack(
 		progressrect2.UpperLeftCorner.X = progressmid;
 		driver->draw2DRectangle(color, progressrect2, clip);
 	}
-	//infostream << "drawItemStack(): 18" << std::endl;
+
 	const std::string &count_text = item.metadata.getString("count_meta");
 	if (font != nullptr && (item.count >= 2 || !count_text.empty())) {
 		// Get the item count as a string
@@ -1398,7 +1341,6 @@ void drawItemStack(
 		video::SColor color(255, 255, 255, 255);
 		font->draw(utf8_to_wide(text).c_str(), rect2, color, false, false, &viewrect);
 	}
-	//infostream << "drawItemStack(): 19" << std::endl;
 }
 
 void drawItemStack(

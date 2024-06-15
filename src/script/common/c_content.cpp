@@ -38,6 +38,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <SColor.h>
 #include <json/json.h>
 #include "mapgen/treegen.h"
+#include <bitset>
 
 struct EnumString es_TileAnimationType[] =
 {
@@ -2269,14 +2270,22 @@ void read_hud_element(lua_State *L, HudElement *elem)
 		elem->type = HUD_ELEM_TEXT;
 
 	lua_getfield(L, 2, "position");
-	elem->pos = lua_istable(L, -1) ? read_v2f(L, -1) : v2f();
+
+	if (lua_istable(L, -1)) {
+		elem->pos = read_v2f(L, -1);
+		elem->change_flags |= (u8)MeshHUDStatsChange::POS;
+	}
+	else
+		elem->pos = v2f();
 	lua_pop(L, 1);
 
 	lua_getfield(L, 2, "scale");
 
 	elem->scale = v2f();
-	if (lua_istable(L, -1))
+	if (lua_istable(L, -1)) {
 		elem->scale = read_v2f(L, -1);
+		elem->change_flags |= (u8)MeshHUDStatsChange::SCALE;
+	}
 	else if (elem->type == HUD_ELEM_MESH)
 		elem->scale.X = 1.0f;
 	lua_pop(L, 1);
@@ -2286,7 +2295,17 @@ void read_hud_element(lua_State *L, HudElement *elem)
 	lua_pop(L, 1);
 
 	elem->name    = getstringfield_default(L, 2, "name", "");
-	elem->text    = getstringfield_default(L, 2, "text", "");
+
+	lua_getfield(L, 2, "text");
+
+	if (lua_isstring(L, -1)) {
+		elem->text = lua_tostring(L, -1);
+		elem->change_flags |= (u8)MeshHUDStatsChange::TEXT;
+	}
+	else
+		elem->text = "";
+	lua_pop(L, 1);
+
 	elem->number  = getintfield_default(L, 2, "number", 0);
 	if (elem->type == HUD_ELEM_WAYPOINT) {
 		// Waypoints reuse the item field to store precision,
@@ -2298,13 +2317,32 @@ void read_hud_element(lua_State *L, HudElement *elem)
 	} else {
 		elem->item = getintfield_default(L, 2, "item", 0);
 	}
-	elem->dir     = getintfield_default(L, 2, "direction", 0);
+
+	lua_getfield(L, 2, "direction");
+
+	if (lua_isnumber(L, -1)) {
+		elem->dir = lua_tointeger(L, -1);
+		elem->change_flags |= (u8)MeshHUDStatsChange::DIR;
+	}
+	else
+		elem->dir = 0;
+	lua_pop(L, 1);
+
 	elem->z_index = rangelim(getintfield_default(L, 2, "z_index", 0), S16_MIN, S16_MAX);
 	elem->text2   = getstringfield_default(L, 2, "text2", "");
 
 	// Deprecated, only for compatibility's sake
-	if (elem->dir == 0)
-		elem->dir = getintfield_default(L, 2, "dir", 0);
+	if (elem->dir == 0) {
+		lua_getfield(L, 2, "dir");
+
+		if (lua_isnumber(L, -1)) {
+			elem->dir = lua_tointeger(L, -1);
+			elem->change_flags |= (u8)MeshHUDStatsChange::DIR;
+		}
+		else
+			elem->dir = 0;
+		lua_pop(L, 1);
+	}
 
 	lua_getfield(L, 2, "alignment");
 	elem->align = lua_istable(L, -1) ? read_v2f(L, -1) : v2f();
@@ -2325,10 +2363,24 @@ void read_hud_element(lua_State *L, HudElement *elem)
 		log_deprecated(L,"Deprecated usage of statbar without size!");
 
 	if (elem->type == HUD_ELEM_MESH) {
-		elem->z_offset = getfloatfield_default(L, 2, "z_offset", 65.0f);
+		lua_getfield(L, 2, "z_offset");
+
+		if (lua_isnumber(L, -1)) {
+			elem->z_offset = lua_tonumber(L, -1);
+			elem->change_flags |= (u8)MeshHUDStatsChange::Z_OFFSET;
+		}
+		else
+			elem->z_offset = 65.0f;
+		lua_pop(L, 1);
 
 		lua_getfield(L, 2, "rotation");
-		elem->rotation = lua_istable(L, -1) ? read_v3f(L, -1) : v3f();
+
+		if (lua_istable(L, -1)) {
+			elem->rotation = read_v3f(L, -1);
+			elem->change_flags |= (u8)MeshHUDStatsChange::ROT;
+		}
+		else
+			elem->rotation = v3f();
 		lua_pop(L, 1);
 
 		lua_getfield(L, 2, "textures");
@@ -2346,6 +2398,7 @@ void read_hud_element(lua_State *L, HudElement *elem)
 				// removes value, keeps key for next iteration
 				lua_pop(L, 1);
 			}
+			elem->change_flags |= (u8)MeshHUDStatsChange::TEXS;
 		}
 
 		lua_pop(L, 1);
@@ -2353,6 +2406,12 @@ void read_hud_element(lua_State *L, HudElement *elem)
 		elem->lighting = getboolfield_default(L, 2, "lighting", true);
 		elem->parent = getintfield_default(L, 2, "parent", 0);
 	}
+
+	infostream << "hud text : " << elem->text << " pos set: " << (elem->change_flags & HUD_STAT_POS) << std::endl;
+	infostream << "hud text : " << elem->text << " rotation set: " << (elem->change_flags & HUD_STAT_ROTATION) << std::endl;
+	infostream << "hud text : " << elem->text << " scale set: " << (elem->change_flags & HUD_STAT_SCALE) << std::endl;
+	infostream << "hud text : " << elem->text << " dir set: " << (elem->change_flags & HUD_STAT_DIR) << std::endl;
+	infostream << "hud text : " << elem->text << " text set: " << (elem->change_flags & HUD_STAT_TEXT) << std::endl;
 }
 
 void push_hud_element(lua_State *L, HudElement *elem)
@@ -2453,9 +2512,12 @@ bool read_hud_change(lua_State *L, HudElementStat &stat, HudElement *elem, void 
 		stat = static_cast<HudElementStat>(statint);
 	}
 
+	elem->change_flags = 0;
+
 	switch (stat) {
 		case HUD_STAT_POS:
 			elem->pos = read_v2f(L, 4);
+			elem->change_flags |= (u8)MeshHUDStatsChange::POS;
 			*value = &elem->pos;
 			break;
 		case HUD_STAT_NAME:
@@ -2464,10 +2526,12 @@ bool read_hud_change(lua_State *L, HudElementStat &stat, HudElement *elem, void 
 			break;
 		case HUD_STAT_SCALE:
 			elem->scale = read_v2f(L, 4);
+			elem->change_flags |= (u8)MeshHUDStatsChange::SCALE;
 			*value = &elem->scale;
 			break;
 		case HUD_STAT_TEXT:
 			elem->text = luaL_checkstring(L, 4);
+			elem->change_flags |= (u8)MeshHUDStatsChange::TEXT;
 			*value = &elem->text;
 			break;
 		case HUD_STAT_NUMBER:
@@ -2482,6 +2546,7 @@ bool read_hud_change(lua_State *L, HudElementStat &stat, HudElement *elem, void 
 			break;
 		case HUD_STAT_DIR:
 			elem->dir = luaL_checknumber(L, 4);
+			elem->change_flags |= (u8)MeshHUDStatsChange::DIR;
 			*value = &elem->dir;
 			break;
 		case HUD_STAT_ALIGN:
@@ -2514,10 +2579,12 @@ bool read_hud_change(lua_State *L, HudElementStat &stat, HudElement *elem, void 
 			break;
 		case HUD_STAT_Z_OFFSET:
 			elem->z_offset = luaL_checknumber(L, 4);
+			elem->change_flags |= (u8)MeshHUDStatsChange::Z_OFFSET;
 			*value = &elem->z_offset;
 			break;
 		case HUD_STAT_ROTATION:
 			elem->rotation = read_v3f(L, 4);
+			elem->change_flags |= (u8)MeshHUDStatsChange::ROT;
 			*value = &elem->rotation;
 			break;
 		case HUD_STAT_TEXTURES:
@@ -2536,6 +2603,7 @@ bool read_hud_change(lua_State *L, HudElementStat &stat, HudElement *elem, void 
 			}
 			lua_pop(L, 1);
 			*value = &elem->textures;
+			elem->change_flags |= (u8)MeshHUDStatsChange::TEXS;
 			break;
 		}
 		case HUD_STAT_LIGHTING:

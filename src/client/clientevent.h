@@ -69,6 +69,7 @@ struct ClientEventHudAdd
 	std::vector<std::string> textures;
 	bool lighting;
 	u32 parent;
+	u8 change_flags;
 };
 
 struct ClientEventHudChange
@@ -83,6 +84,7 @@ struct ClientEventHudChange
 	f32 fdata;
 	std::vector<std::string> vsdata;
 	bool booldata;
+	u8 change_flags;
 };
 
 struct ClientEvent

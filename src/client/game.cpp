@@ -2954,7 +2954,6 @@ void Game::handleClientEvent_HandleParticleEvent(ClientEvent *event,
 
 void Game::handleClientEvent_HudAdd(ClientEvent *event, CameraOrientation *cam)
 {
-	infostream << "handleClientEvent_HudAdd() : 1 " << std::endl;
 	LocalPlayer *player = client->getEnv().getLocalPlayer();
 
 	u32 server_id = event->hudadd->server_id;
@@ -2964,7 +2963,7 @@ void Game::handleClientEvent_HudAdd(ClientEvent *event, CameraOrientation *cam)
 		delete event->hudadd;
 		return;
 	}
-	infostream << "handleClientEvent_HudAdd() : 2 " << std::endl;
+
 	HudElement *e = new HudElement;
 	e->type   = static_cast<HudElementType>(event->hudadd->type);
 	e->pos    = event->hudadd->pos;
@@ -2986,15 +2985,13 @@ void Game::handleClientEvent_HudAdd(ClientEvent *event, CameraOrientation *cam)
 	e->textures  = event->hudadd->textures;
 	e->lighting  = event->hudadd->lighting;
 	e->parent    = event->hudadd->parent;
+	e->change_flags = event->hudadd->change_flags;
 	m_hud_server_to_client[server_id] = player->addHud(e);
 
 	delete event->hudadd;
-	infostream << "handleClientEvent_HudAdd() : 3 " << std::endl;
-	if (e->type == HUD_ELEM_MESH) {
-		infostream << "handleClientEvent_HudAdd() : 3.1 " << std::endl;
+
+	if (e->type == HUD_ELEM_MESH)
 		hud->addHUDScene(m_hud_server_to_client[server_id], *e);
-	}
-	infostream << "handleClientEvent_HudAdd() : 4 " << std::endl;
 }
 
 void Game::handleClientEvent_HudRemove(ClientEvent *event, CameraOrientation *cam)
@@ -3076,6 +3073,8 @@ void Game::handleClientEvent_HudChange(ClientEvent *event, CameraOrientation *ca
 		case HudElementStat_END:
 			break;
 	}
+
+	e->change_flags = event->hudchange->change_flags;
 
 #undef CASE_SET
 
