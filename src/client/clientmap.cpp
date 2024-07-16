@@ -375,7 +375,7 @@ void ClientMap::updateDrawList()
 				// This is needed because this function is not called every frame.
 				float frustum_cull_extra_radius = 300.0f;
 				if (is_frustum_culled(mesh_sphere_center,
-						mesh_sphere_radius + frustum_cull_extra_radius)) {
+						mesh_sphere_radius)) {
 					blocks_frustum_culled++;
 					continue;
 				}
@@ -474,7 +474,7 @@ void ClientMap::updateDrawList()
 			// This is needed because this function is not called every frame.
 			float frustum_cull_extra_radius = 300.0f;
 			if (is_frustum_culled(mesh_sphere_center,
-					mesh_sphere_radius + frustum_cull_extra_radius)) {
+					mesh_sphere_radius)) {
 				blocks_frustum_culled++;
 				continue;
 			}
@@ -614,6 +614,8 @@ void ClientMap::updateDrawList()
 	}
 	g_profiler->avg("MapBlocks shortlist [#]", shortlist.size());
 
+	f32 sorting_distance_sq = std::pow(m_cache_transparency_sorting_distance * BS, 2.0f);
+
 	assert(m_drawlist.empty() || shortlist.empty());
 	for (auto pos : shortlist) {
 		MapBlock *block = getBlockNoCreateNoEx(pos);
@@ -750,6 +752,7 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 	auto is_frustum_culled = m_client->getCamera()->getFrustumCuller();
 
 	const MeshGrid mesh_grid = m_client->getMeshGrid();
+
 	for (auto &i : m_drawlist) {
 		v3s16 block_pos = i.first;
 		MapBlock *block = i.second;
@@ -761,11 +764,11 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 
 		// Do exact frustum culling
 		// (The one in updateDrawList is only coarse.)
-		v3f mesh_sphere_center = intToFloat(block->getPosRelative(), BS)
-				+ block_mesh->getBoundingSphereCenter();
-		f32 mesh_sphere_radius = block_mesh->getBoundingRadius();
-		if (is_frustum_culled(mesh_sphere_center, mesh_sphere_radius))
-			continue;
+		//v3f mesh_sphere_center = intToFloat(block->getPosRelative(), BS)
+		//		+ block_mesh->getBoundingSphereCenter();
+		//f32 mesh_sphere_radius = block_mesh->getBoundingRadius();
+		//if (is_frustum_culled(mesh_sphere_center, mesh_sphere_radius))
+		//	continue;
 
 		v3f block_pos_r = intToFloat(block->getPosRelative() + MAP_BLOCKSIZE / 2, BS);
 
@@ -824,6 +827,9 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 		}
 	}
 
+	//infostream << "renderMap() count of transparent meshbuffers: " << draw_order.size() << std::endl;
+	//infostream << "renderMap() count of mapblock meshes: " << mapblock_count << std::endl;
+
 	// Capture draw order for all solid meshes
 	for (auto &map : grouped_buffers.maps) {
 		for (auto &list : map) {
@@ -833,6 +839,8 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 			}
 		}
 	}
+
+	//infostream << "renderMap() common count of meshbuffers: " << draw_order.size() << std::endl;
 
 	TimeTaker draw("Drawing mesh buffers");
 
@@ -870,6 +878,8 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 				layer.MagFilter = video::ETMAGF_NEAREST;
 				layer.AnisotropicFilter = 0;
 			}
+			//set_material_c++;
+
 			driver->setMaterial(material);
 			++material_swaps;
 			material.TextureLayers[ShadowRenderer::TEXTURE_LAYER_SHADOW].Texture = nullptr;
@@ -882,6 +892,8 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 		descriptor.draw(driver);
 		vertex_count += buf->getIndexCount();
 	}
+
+	//infostream << "renderMap() count of mesh buffers drawn: " << draw_order.size() << std::endl;
 
 	g_profiler->avg(prefix + "draw meshes [ms]", draw.stop(true));
 

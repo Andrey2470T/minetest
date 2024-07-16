@@ -660,10 +660,13 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data, v3s16 camera_offs
 		Convert MeshCollector to SMesh
 	*/
 
-	const bool desync_animations = g_settings->getBool(
-		"desynchronize_mapblock_texture_animation");
-
 	m_bounding_radius = std::sqrt(collector.m_bounding_radius_sq);
+
+	TextureAtlas *atlas = client->getNodeDefManager()->getAtlas();
+	core::dimension2du atlas_size = atlas->getTextureSize();
+
+	bool crack_tiles_cleared = false;
+	bool has_crack = false;
 
 	for (int layer = 0; layer < MAX_TILE_LAYERS; layer++) {
 		scene::SMesh *mesh = (scene::SMesh *)m_mesh[layer];
@@ -674,9 +677,46 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data, v3s16 camera_offs
 
 			applyTileColor(p);
 
+			//infostream << "MapBlockMesh layer id = " << i << ", atlas_tile_info_index = " << p.layer.atlas_tile_info_index << std::endl;
+			const TileInfo &tile_info = atlas->getTileInfo(p.layer.atlas_tile_info_index);
+
+			int tile_pos_shift = 0;
+
+			if (p.layer.material_flags & MATERIAL_FLAG_CRACK) {
+				std::ostringstream os(std::ios::binary);
+				os << m_tsrc->getTextureName(p.layer.texture_id) << "^[crack";
+				if (p.layer.material_flags & MATERIAL_FLAG_CRACK_OVERLAY)
+					os << "o";
+				u8 tiles = p.layer.scale;
+				if (tiles > 1)
+					os << ":" << (u32)tiles;
+				os << ":" << (u32)p.layer.animation_frame_count << ":";
+
+				if (!crack_tiles_cleared) {
+					crack_tiles_cleared = true;
+					atlas->clearCrackTiles();
+				}
+
+				has_crack = true;
+				atlas->insertCrackTile(p.layer.atlas_tile_info_index, os.str());
+
+				// Shift each UV by the half-width of the atlas to locate it in the separate right side
+				tile_pos_shift = atlas_size.Width / 2;
+			}
+
+			// Re-calculate texture coordinates of vertices for linking to the atlas
+			for (u32 k = 0; k < p.vertices.size(); k++) {
+				v2f &tcoords_k = p.vertices[k].TCoords;
+
+				int rel_x = core::round32(tcoords_k.X * tile_info.width);
+				int rel_y = core::round32(tcoords_k.Y * tile_info.height);
+
+				tcoords_k.X = f32(tile_info.x + rel_x + tile_pos_shift) / atlas_size.Width;
+				tcoords_k.Y = f32(tile_info.y + rel_y) / atlas_size.Height;
+			}
 			// Generate animation data
 			// - Cracks
-			if (p.layer.material_flags & MATERIAL_FLAG_CRACK) {
+			/*if (p.layer.material_flags & MATERIAL_FLAG_CRACK) {
 				// Find the texture name plus ^[crack:N:
 				std::ostringstream os(std::ios::binary);
 				os << m_tsrc->getTextureName(p.layer.texture_id) << "^[crack";
@@ -711,7 +751,7 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data, v3s16 camera_offs
 				}
 				// Replace tile texture with the first animation frame
 				p.layer.texture = (*p.layer.frames)[0].texture;
-			}
+			}*/
 
 			if (!m_enable_shaders) {
 				// Extract colors for day-night animation
@@ -742,7 +782,7 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data, v3s16 camera_offs
 			material.Lighting = false;
 			material.BackfaceCulling = true;
 			material.FogEnable = true;
-			material.setTexture(0, p.layer.texture);
+			material.setTexture(0, atlas->getTexture());
 			material.forEachTexture([] (auto &tex) {
 				tex.MinFilter = video::ETMINF_NEAREST_MIPMAP_NEAREST;
 				tex.MagFilter = video::ETMAGF_NEAREST;
@@ -752,9 +792,9 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data, v3s16 camera_offs
 				material.MaterialType = m_shdrsrc->getShaderInfo(
 						p.layer.shader_id).material;
 				p.layer.applyMaterialOptionsWithShaders(material);
-				if (p.layer.normal_texture)
-					material.setTexture(1, p.layer.normal_texture);
-				material.setTexture(2, p.layer.flags_texture);
+				//if (p.layer.normal_texture)
+				//	material.setTexture(1, p.layer.normal_texture);
+				//material.setTexture(2, p.layer.flags_texture);
 			} else {
 				p.layer.applyMaterialOptions(material);
 			}
@@ -788,14 +828,21 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data, v3s16 camera_offs
 		}
 	}
 
+	if (has_crack)
+		atlas->setCrackAnimLastBlockPos(data->m_blockpos);
+	// If the mapblock mesh at the same position is being reconstructed and
+	// was cracked in past, clear the crack tiles remain after it
+	else if (atlas->getCrackAnimLastBlockPos() == data->m_blockpos)
+		atlas->clearCrackTiles();
+
 	//std::cout<<"added "<<fastfaces.getSize()<<" faces."<<std::endl;
 	m_bsp_tree.buildTree(&m_transparent_triangles, data->side_length);
 
 	// Check if animation is required for this mesh
 	m_has_animation =
-		!m_crack_materials.empty() ||
-		!m_daynight_diffs.empty() ||
-		!m_animation_info.empty();
+		//!m_crack_materials.empty() ||
+		!m_daynight_diffs.empty();// ||
+		//!m_animation_info.empty();
 }
 
 MapBlockMesh::~MapBlockMesh()
@@ -823,7 +870,7 @@ bool MapBlockMesh::animate(bool faraway, float time, int crack,
 	m_animation_force_timer = myrand_range(5, 100);
 
 	// Cracks
-	if (crack != m_last_crack) {
+	/*if (crack != m_last_crack) {
 		for (auto &crack_material : m_crack_materials) {
 			scene::IMeshBuffer *buf = m_mesh[crack_material.first.first]->
 				getMeshBuffer(crack_material.first.second);
@@ -870,7 +917,7 @@ bool MapBlockMesh::animate(bool faraway, float time, int crack,
 				buf->getMaterial().setTexture(1, frame.normal_texture);
 			buf->getMaterial().setTexture(2, frame.flags_texture);
 		}
-	}
+	}*/
 
 	// Day-night transition
 	if (!m_enable_shaders && (daynight_ratio != m_last_daynight_ratio)) {
