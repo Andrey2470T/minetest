@@ -14,6 +14,7 @@
 #if CHECK_CLIENT_BUILD()
 #include "client/tile.h"
 #include <IMeshManipulator.h>
+#include "client/texture_atlas.h"
 class Client;
 #endif
 #include "itemgroup.h"
@@ -507,7 +508,8 @@ struct ContentFeatures
 
 #if CHECK_CLIENT_BUILD()
 	void updateTextures(ITextureSource *tsrc, IShaderSource *shdsrc,
-		scene::IMeshManipulator *meshmanip, Client *client, const TextureSettings &tsettings);
+		scene::IMeshManipulator *meshmanip, Client *client, const TextureSettings &tsettings,
+		std::vector<TileInfo> &tiles_infos);
 #endif
 
 private:
@@ -729,6 +731,16 @@ public:
 	 */
 	void resolveCrossrefs();
 
+#ifndef SERVER
+	/*!
+	 * Provides access to the atlas builder
+	 */
+	AtlasBuilder *getAtlasBuilder() const
+	{
+		return m_atlas_builder.get();
+	}
+#endif
+
 private:
 	/*!
 	 * Resets the manager to its initial state.
@@ -819,6 +831,13 @@ private:
 	 * Fast cache of content lighting flags.
 	 */
 	ContentLightingFlags m_content_lighting_flag_cache[CONTENT_MAX + 1L];
+
+#ifndef SERVER
+	/*!
+	 * Texture atlas builder abstraction keeping and handling atlases.
+	 */
+	mutable std::unique_ptr<AtlasBuilder> m_atlas_builder;
+#endif
 };
 
 NodeDefManager *createNodeDefManager();

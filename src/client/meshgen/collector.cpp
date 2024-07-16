@@ -2,10 +2,21 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Copyright (C) 2018 numzero, Lobachevskiy Vitaliy <numzer0@yandex.ru>
 
+#include "client/client.h"
 #include "collector.h"
+#include "settings.h"
+#include <cassert>
+#include <sstream>
+#include <cmath>
 #include <stdexcept>
+#include <algorithm>
 #include "log.h"
 #include "client/mesh.h"
+#include "client/shader.h"
+#include "util/timetaker.h"
+#include "nodedef.h"
+#include <stdexcept>
+#include "log.h"
 
 void MeshCollector::append(const TileSpec &tile, const video::S3DVertex *vertices,
 		u32 numVertices, const u16 *indices, u32 numIndices)
@@ -33,8 +44,8 @@ void MeshCollector::append(const TileLayer &layer, const video::S3DVertex *verti
 	for (u32 i = 0; i < numVertices; i++) {
 		p.vertices.emplace_back(vertices[i].Pos + offset, vertices[i].Normal,
 				vertices[i].Color, scale * vertices[i].TCoords);
-		m_bounding_radius_sq = std::max(m_bounding_radius_sq,
-				(vertices[i].Pos - m_center_pos).getLengthSQ());
+		bounding_radius_sq = std::max(bounding_radius_sq,
+				(vertices[i].Pos - center_pos).getLengthSQ());
 	}
 
 	for (u32 i = 0; i < numIndices; i++)

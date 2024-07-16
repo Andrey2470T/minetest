@@ -198,8 +198,8 @@ void TestMapblockMeshGenerator::testSurroundedNode()
 	data.m_vmanip.setNode({0, 0, 0}, {stone, 0, 0});
 	data.m_vmanip.setNode({1, 0, 0}, {wood, 0, 0});
 
-	MeshCollector col{{}};
-	MapblockMeshGenerator mg{&data, &col};
+	MeshCollector col{v3f(), v3f()};
+	MapblockMeshGenerator mg{&data, &col, nullptr};
 	mg.generate();
 	UASSERTEQ(std::size_t, col.prebuffers[0].size(), 1);
 	UASSERTEQ(std::size_t, col.prebuffers[1].size(), 0);
@@ -219,8 +219,8 @@ void TestMapblockMeshGenerator::testInterliquidSame()
 	data.m_vmanip.setNode({0, 0, 0}, {water, 0, 0});
 	data.m_vmanip.setNode({1, 0, 0}, {water, 0, 0});
 
-	MeshCollector col{{}};
-	MapblockMeshGenerator mg{&data, &col};
+	MeshCollector col{v3f(), v3f()};
+	MapblockMeshGenerator mg{&data, &col, nullptr};
 	mg.generate();
 	UASSERTEQ(std::size_t, col.prebuffers[0].size(), 1);
 	UASSERTEQ(std::size_t, col.prebuffers[1].size(), 0);
@@ -241,8 +241,8 @@ void TestMapblockMeshGenerator::testInterliquidDifferent()
 	data.m_vmanip.setNode({0, 0, 0}, {water, 0, 0});
 	data.m_vmanip.setNode({0, 0, 1}, {lava, 0, 0});
 
-	MeshCollector col{{}};
-	MapblockMeshGenerator mg{&data, &col};
+	MeshCollector col{v3f(), v3f()};
+	MapblockMeshGenerator mg{&data, &col, nullptr};
 	mg.generate();
 	UASSERTEQ(std::size_t, col.prebuffers[0].size(), 1);
 	UASSERTEQ(std::size_t, col.prebuffers[1].size(), 0);

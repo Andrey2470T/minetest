@@ -11,6 +11,7 @@
 
 #include "util/numeric.h"
 #include "client/tile.h"
+#include "client/meshgen/collector.h"
 #include "voxel.h"
 #include <array>
 #include <map>

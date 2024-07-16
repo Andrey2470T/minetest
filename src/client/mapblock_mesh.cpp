@@ -24,6 +24,7 @@
 #include <SMesh.h>
 #include <IMeshBuffer.h>
 #include <SMeshBuffer.h>
+#include <IMaterialRenderer.h>
 
 /*
 	MeshMakeData
@@ -601,8 +602,7 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data):
 	m_tsrc(client->getTextureSource()),
 	m_shdrsrc(client->getShaderSource()),
 	m_bounding_sphere_center((data->m_side_length * 0.5f - 0.5f) * BS),
-	m_animation_force_timer(0), // force initial animation
-	m_last_crack(-1)
+	m_last_daynight_ratio((u32) -1)
 {
 	ZoneScoped;
 
@@ -635,6 +635,13 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data):
 	v3f offset = intToFloat((data->m_blockpos - mesh_grid.getMeshPos(data->m_blockpos)) * MAP_BLOCKSIZE, BS);
 
 	MeshCollector collector(m_bounding_sphere_center, offset);
+	/*
+		Add special graphics:
+		- torches
+		- flowing water
+		- fences
+		- whatever
+	*/
 
 	{
 		// Generate everything
@@ -645,16 +652,27 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data):
 		Convert MeshCollector to SMesh
 	*/
 
-	m_bounding_radius = std::sqrt(collector.m_bounding_radius_sq);
+	m_bounding_radius = std::sqrt(collector.bounding_radius_sq);
+
+	AtlasBuilder *builder = client->getNodeDefManager()->getAtlasBuilder();
 
 	for (int layer = 0; layer < MAX_TILE_LAYERS; layer++) {
 		scene::SMesh *mesh = static_cast<scene::SMesh *>(m_mesh[layer].get());
 
+		//infostream << "MapBlockMesh() prebuffers count: " << collector.prebuffers[layer].size() << std::endl;
 		for(u32 i = 0; i < collector.prebuffers[layer].size(); i++)
 		{
 			PreMeshBuffer &p = collector.prebuffers[layer][i];
 
-			p.applyTileColor();
+			//infostream << "MapBlockMesh() tiles_infos_index: " << p.layer.tiles_infos_index << std::endl;
+
+			//TileInfo &info = builder->getTileInfo(p.layer.tiles_infos_index);
+			//infostream << "MapBlockMesh() x: " << info.x << ", y: " << info.y << std::endl;
+
+			TextureAtlas *atlas = builder->getAtlas(p.layer.tiles_infos_index);
+			core::dimension2du atlas_size = atlas->getTextureSize();
+
+			int tile_pos_shift = 0;
 
 			// Generate animation data
 			// - Cracks
@@ -668,19 +686,53 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data):
 				if (tiles > 1)
 					os << ":" << (u32)tiles;
 				os << ":" << (u32)p.layer.animation_frame_count << ":";
-				m_crack_materials.insert(std::make_pair(
+
+				if (p.layer.atlas_used) {
+					atlas->insertCrackTile(p.layer.tiles_infos_index, os.str());
+
+					// Shift each UV by the half-width of the atlas to locate it in the separate right side
+					tile_pos_shift = atlas_size.Width / 2;
+				}
+				else {
+					m_crack_materials.insert(std::make_pair(
 						std::pair<u8, u32>(layer, i), os.str()));
-				// Replace tile texture with the cracked one
-				p.layer.texture = m_tsrc->getTextureForMesh(
-						os.str() + "0",
-						&p.layer.texture_id);
+					// Replace tile texture with the cracked one
+					p.layer.texture = m_tsrc->getTextureForMesh(
+							os.str() + "0",
+							&p.layer.texture_id);
+				}
 			}
+
 			// - Texture animation
-			if (p.layer.material_flags & MATERIAL_FLAG_ANIMATION) {
+			if (!p.layer.atlas_used && (p.layer.material_flags & MATERIAL_FLAG_ANIMATION)) {
 				// Add to MapBlockMesh in order to animate these tiles
 				m_animation_info.emplace(std::make_pair(layer, i), AnimationInfo(p.layer));
 				// Replace tile texture with the first animation frame
 				p.layer.texture = (*p.layer.frames)[0].texture;
+
+			}
+
+			// Modify the vertices
+			for (u32 k = 0; k < p.vertices.size(); k++) {
+				video::S3DVertex &vertex = p.vertices[k];
+
+				if (p.layer.atlas_used) {
+					TileInfo &tile_info = builder->getTileInfo(p.layer.tiles_infos_index);
+					u32 frame_thickness = atlas->getFrameThickness();
+
+					// Tile size without taking into account the frame
+					int width = tile_info.width - 2 * frame_thickness;
+					int height = tile_info.height - 2 * frame_thickness;
+					// Re-calculate UV for linking to the necessary TileInfo pixels in the atlas
+					int rel_x = core::round32(vertex.TCoords.X * width);
+					int rel_y = core::round32(vertex.TCoords.Y * height);
+
+					//infostream << "MapBlockMesh() x: " << tile_info.x << ", y: " << tile_info.y << std::endl;
+					vertex.TCoords.X = f32(tile_info.x + frame_thickness + rel_x + tile_pos_shift) / atlas_size.Width;
+					vertex.TCoords.Y = f32(tile_info.y + frame_thickness + rel_y) / atlas_size.Height;
+
+					//infostream << "vertex.TCoords.X: " << vertex.TCoords.X << ", vertex.TCoords.Y: " << vertex.TCoords.Y << std::endl;
+				}
 			}
 
 			// Create material
