@@ -261,6 +261,10 @@ void COpenGLDriver::setTransform(E_TRANSFORMATION_STATE state, const core::matri
 	}
 }
 
+scene::IVertexBuffer *COpenGLDriver::createVertexBuffer()
+{
+}
+
 bool COpenGLDriver::updateVertexHardwareBuffer(SHWBufferLink_opengl *HWBuffer)
 {
 	if (!HWBuffer)
@@ -648,6 +652,11 @@ IRenderTarget *COpenGLDriver::addRenderTarget()
 static inline const GLvoid *buffer_offset(const size_t offset)
 {
 	return (const GLvoid *)offset;
+}
+
+//! Draws array or elements of the buffer.
+void COpenGLDriver::drawVertexBuffer(const scene::IVertexBuffer *vbuffer)
+{
 }
 
 //! draws a vertex primitive list

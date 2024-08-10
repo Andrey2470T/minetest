@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "irrlichttypes_extrabloated.h"
 #include "util/numeric.h"
 #include "client/tile.h"
+#include "client/mesh_storage.h"
 #include "voxel.h"
 #include <array>
 #include <map>
@@ -70,39 +71,11 @@ struct MeshMakeData
 	void setSmoothLighting(bool smooth_lighting);
 };
 
-// represents a triangle as indexes into the vertex buffer in SMeshBuffer
-class MeshTriangle
-{
-public:
-	scene::SMeshBuffer *buffer;
-	u16 p1, p2, p3;
-	v3f centroid;
-	float areaSQ;
-
-	void updateAttributes()
-	{
-		v3f v1 = buffer->getPosition(p1);
-		v3f v2 = buffer->getPosition(p2);
-		v3f v3 = buffer->getPosition(p3);
-
-		centroid = (v1 + v2 + v3) / 3;
-		areaSQ = (v2-v1).crossProduct(v3-v1).getLengthSQ() / 4;
-	}
-
-	v3f getNormal() const {
-		v3f v1 = buffer->getPosition(p1);
-		v3f v2 = buffer->getPosition(p2);
-		v3f v3 = buffer->getPosition(p3);
-
-		return (v2-v1).crossProduct(v3-v1);
-	}
-};
-
 /**
  * Implements a binary space partitioning tree
  * See also: https://en.wikipedia.org/wiki/Binary_space_partitioning
  */
-class MapBlockBspTree
+/*class MapBlockBspTree
 {
 public:
 	MapBlockBspTree() {}
@@ -137,7 +110,7 @@ private:
 	const std::vector<MeshTriangle> *triangles = nullptr; // this reference is managed externally
 	std::vector<TreeNode> nodes; // list of nodes
 	s32 root = -1; // index of the root node
-};
+};*/
 
 /*
  * PartialMeshBuffer
@@ -149,22 +122,23 @@ private:
  * and a single index buffer. There's no way to share these between mesh buffers.
  *
  */
-class PartialMeshBuffer
+/*class PartialMeshBuffer
 {
 public:
-	PartialMeshBuffer(scene::SMeshBuffer *buffer, std::vector<u16> &&vertex_indexes) :
-			m_buffer(buffer), m_vertex_indexes(std::move(vertex_indexes))
+	PartialMeshBuffer(u32 layer_ref, u32 buffer_ref, std::vector<u16> &&vertex_indexes) :
+			m_layer_ref(layer_ref), m_buffer_ref(buffer_ref), m_vertex_indexes(std::move(vertex_indexes))
 	{}
 
-	scene::IMeshBuffer *getBuffer() const { return m_buffer; }
+	std::pair<u32, u32> getBuffer() const { return std::make_pair(m_layer_ref, m_buffer_ref); }
 	const std::vector<u16> &getVertexIndexes() const { return m_vertex_indexes; }
 
-	void beforeDraw() const;
-	void afterDraw() const;
+	//void beforeDraw() const;
+	//void afterDraw() const;
 private:
-	scene::SMeshBuffer *m_buffer;
+	u32 m_layer_ref;
+	u32 m_buffer_ref;
 	mutable std::vector<u16> m_vertex_indexes;
-};
+};*/
 
 /*
 	Holds a mesh for a mapblock.
@@ -177,6 +151,7 @@ private:
 	- animated flowing liquids [not implemented]
 	- animating vertex positions for e.g. axles [not implemented]
 */
+
 class MapBlockMesh
 {
 public:
@@ -184,22 +159,9 @@ public:
 	MapBlockMesh(Client *client, MeshMakeData *data, v3s16 camera_offset);
 	~MapBlockMesh();
 
-	// Main animation function, parameters:
-	//   faraway: whether the block is far away from the camera (~50 nodes)
-	//   time: the global animation time, 0 .. 60 (repeats every minute)
-	//   daynight_ratio: 0 .. 1000
-	//   crack: -1 .. CRACK_ANIMATION_LENGTH-1 (-1 for off)
-	// Returns true if anything has been changed.
-	bool animate(bool faraway, float time, int crack, u32 daynight_ratio);
-
-	scene::IMesh *getMesh()
+	MeshRef &getMesh()
 	{
-		return m_mesh[0];
-	}
-
-	scene::IMesh *getMesh(u8 layer)
-	{
-		return m_mesh[layer];
+		return m_mesh;
 	}
 
 	std::vector<MinimapMapblock*> moveMinimapMapblocks()
@@ -209,17 +171,6 @@ public:
 		return minimap_mapblocks;
 	}
 
-	bool isAnimationForced() const
-	{
-		return m_animation_force_timer == 0;
-	}
-
-	void decreaseAnimationForceTimer()
-	{
-		if(m_animation_force_timer > 0)
-			m_animation_force_timer--;
-	}
-
 	/// Radius of the bounding-sphere, in BS-space.
 	f32 getBoundingRadius() const { return m_bounding_radius; }
 
@@ -227,23 +178,21 @@ public:
 	v3f getBoundingSphereCenter() const { return m_bounding_sphere_center; }
 
 	/// update transparent buffers to render towards the camera
-	void updateTransparentBuffers(v3f camera_pos, v3s16 block_pos);
-	void consolidateTransparentBuffers();
+	//void updateTransparentBuffers(v3f camera_pos, v3s16 block_pos);
+	//void consolidateTransparentBuffers();
 
 	/// get the list of transparent buffers
-	const std::vector<PartialMeshBuffer> &getTransparentBuffers() const
+	/*const std::vector<PartialMeshBuffer> &getTransparentBuffers() const
 	{
 		return this->m_transparent_buffers;
-	}
+	}*/
+    std::map<v3f, MeshTriangle, TriangleComparer> m_transparent_triangles;
 
 private:
-	struct AnimationInfo {
-		int frame; // last animation frame
-		int frame_offset;
-		TileLayer tile;
-	};
+	MeshRef m_mesh;
 
-	scene::IMesh *m_mesh[MAX_TILE_LAYERS];
+	MeshStorage *m_storage;
+
 	std::vector<MinimapMapblock*> m_minimap_mapblocks;
 	ITextureSource *m_tsrc;
 	IShaderSource *m_shdrsrc;
@@ -253,50 +202,13 @@ private:
 
 	bool m_enable_shaders;
 
-	// Must animate() be called before rendering?
-	bool m_has_animation;
-	int m_animation_force_timer;
-
-	// Animation info: cracks
-	// Last crack value passed to animate()
-	int m_last_crack;
-	// Maps mesh and mesh buffer (i.e. material) indices to base texture names
-	//std::map<std::pair<u8, u32>, std::string> m_crack_materials;
-
-	// Animation info: texture animation
-	// Maps mesh and mesh buffer indices to TileSpecs
-	// Keys are pairs of (mesh index, buffer index in the mesh)
-	//std::map<std::pair<u8, u32>, AnimationInfo> m_animation_info;
-
-	// Animation info: day/night transitions
-	// Last daynight_ratio value passed to animate()
-	u32 m_last_daynight_ratio;
-	// For each mesh and mesh buffer, stores pre-baked colors
-	// of sunlit vertices
-	// Keys are pairs of (mesh index, buffer index in the mesh)
-	std::map<std::pair<u8, u32>, std::map<u32, video::SColor > > m_daynight_diffs;
-
 	// list of all semitransparent triangles in the mapblock
-	std::vector<MeshTriangle> m_transparent_triangles;
+	//std::vector<MeshTriangle> m_transparent_triangles;
 	// Binary Space Partitioning tree for the block
-	MapBlockBspTree m_bsp_tree;
+	//MapBlockBspTree m_bsp_tree;
 	// Ordered list of references to parts of transparent buffers to draw
-	std::vector<PartialMeshBuffer> m_transparent_buffers;
+	//std::vector<PartialMeshBuffer> m_transparent_buffers;
 };
-
-/*!
- * Encodes light of a node.
- * The result is not the final color, but a
- * half-baked vertex color.
- * You have to multiply the resulting color
- * with the node's color.
- *
- * \param light the first 8 bits are day light,
- * the last 8 bits are night light
- * \param emissive_light amount of light the surface emits,
- * from 0 to LIGHT_SUN.
- */
-video::SColor encode_light(u16 light, u8 emissive_light);
 
 // Compute light at node
 u16 getInteriorLight(MapNode n, s32 increment, const NodeDefManager *ndef);
@@ -304,31 +216,6 @@ u16 getFaceLight(MapNode n, MapNode n2, const NodeDefManager *ndef);
 u16 getSmoothLightSolid(const v3s16 &p, const v3s16 &face_dir, const v3s16 &corner, MeshMakeData *data);
 u16 getSmoothLightTransparent(const v3s16 &p, const v3s16 &corner, MeshMakeData *data);
 
-/*!
- * Returns the sunlight's color from the current
- * day-night ratio.
- */
-void get_sunlight_color(video::SColorf *sunlight, u32 daynight_ratio);
-
-/*!
- * Gives the final  SColor shown on screen.
- *
- * \param result output color
- * \param light first 8 bits are day light, second 8 bits are
- * night light
- */
-void final_color_blend(video::SColor *result,
-		u16 light, u32 daynight_ratio);
-
-/*!
- * Gives the final  SColor shown on screen.
- *
- * \param result output color
- * \param data the half-baked vertex color
- * \param dayLight color of the sunlight
- */
-void final_color_blend(video::SColor *result,
-		const video::SColor &data, const video::SColorf &dayLight);
 
 // Retrieves the TileSpec of a face of a node
 // Adds MATERIAL_FLAG_CRACK if the node is cracked

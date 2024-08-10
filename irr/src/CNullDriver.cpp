@@ -258,6 +258,12 @@ void CNullDriver::setTransform(E_TRANSFORMATION_STATE state, const core::matrix4
 {
 }
 
+//! create the vertex buffer
+scene::IVertexBuffer *CNullDriver::createVertexBuffer()
+{
+    return nullptr;
+}
+
 //! Returns the transformation set by setTransform
 const core::matrix4 &CNullDriver::getTransform(E_TRANSFORMATION_STATE state) const
 {
@@ -599,6 +605,11 @@ void CNullDriver::setViewPort(const core::rect<s32> &area)
 const core::rect<s32> &CNullDriver::getViewPort() const
 {
 	return ViewPort;
+}
+
+//! Draws array or elements of the buffer.
+void CNullDriver::drawVertexBuffer(const scene::IVertexBuffer *vbuffer)
+{
 }
 
 //! draws a vertex primitive list

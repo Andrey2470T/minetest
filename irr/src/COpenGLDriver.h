@@ -56,6 +56,8 @@ public:
 	//! sets transformation
 	void setTransform(E_TRANSFORMATION_STATE state, const core::matrix4 &mat) override;
 
+    scene::IVertexBuffer *createVertexBuffer() override;
+
 	struct SHWBufferLink_opengl : public SHWBufferLink
 	{
 		SHWBufferLink_opengl(const scene::IMeshBuffer *_MeshBuffer) :
@@ -106,6 +108,9 @@ public:
 
 	//! Create render target.
 	IRenderTarget *addRenderTarget() override;
+
+	//! Draws array or elements of the buffer.
+	void drawVertexBuffer(const scene::IVertexBuffer *vbuffer) override;
 
 	//! draws a vertex primitive list
 	virtual void drawVertexPrimitiveList(const void *vertices, u32 vertexCount,

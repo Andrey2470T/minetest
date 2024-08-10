@@ -27,6 +27,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/minimap.h"
 #include "client/shadows/dynamicshadowsrender.h"
 #include "nodedef.h"
+#include "util/timetaker.h"
 
 /// Draw3D pipeline step
 void Draw3D::run(PipelineContext &context)

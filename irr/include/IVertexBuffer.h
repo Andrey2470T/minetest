@@ -5,43 +5,110 @@
 #pragma once
 
 #include "IReferenceCounted.h"
-#include "irrArray.h"
-#include "EHardwareBufferFlags.h"
 #include "S3DVertex.h"
+#include "SVertexIndex.h"
+#include "EHardwareBufferFlags.h"
+#include "EPrimitiveTypes.h"
+#include "os.h"
+#include "SMaterial.h"
+#include <cassert>
 
 namespace irr
 {
+
+namespace video
+{
+	class IVideoDriver;
+}
+
 namespace scene
 {
 
-class IVertexBuffer : public virtual IReferenceCounted
+class IVertexBuffer
 {
 public:
-	virtual void *getData() = 0;
-	virtual video::E_VERTEX_TYPE getType() const = 0;
-	virtual void setType(video::E_VERTEX_TYPE vertexType) = 0;
-	virtual u32 stride() const = 0;
-	virtual u32 size() const = 0;
-	virtual void push_back(const video::S3DVertex &element) = 0;
-	virtual video::S3DVertex &operator[](const u32 index) const = 0;
-	virtual video::S3DVertex &getLast() = 0;
-	virtual void set_used(u32 usedNow) = 0;
-	virtual void reallocate(u32 new_size) = 0;
-	virtual u32 allocated_size() const = 0;
-	virtual video::S3DVertex *pointer() = 0;
+	IVertexBuffer()
+		: VertexBufferId(0), IndexBufferId(0)
+	{}
+	virtual ~IVertexBuffer() {}
 
-	//! get the current hardware mapping hint
-	virtual E_HARDWARE_MAPPING getHardwareMappingHint() const = 0;
+    void formatBuffer(video::E_VERTEX_TYPE vertexType = video::EVT_STANDARD,
+		scene::E_HARDWARE_MAPPING mappingHintVertex = scene::EHM_STATIC,
+		video::E_INDEX_TYPE indexType = video::EIT_32BIT,
+		scene::E_HARDWARE_MAPPING mappingHintIndex = scene::EHM_STATIC)
+	{
+		assert(mappingHintVertex != scene::EHM_NEVER);
+		VertexType = vertexType;
+		MappingHint_Vertex = mappingHintVertex;
 
-	//! set the hardware mapping hint, for driver
-	virtual void setHardwareMappingHint(E_HARDWARE_MAPPING NewMappingHint) = 0;
+		assert(mappingHintIndex != scene::EHM_NEVER);
+		IndexType = indexType;
+		MappingHint_Index = mappingHintIndex;
+	}
 
-	//! flags the meshbuffer as changed, reloads hardware buffers
-	virtual void setDirty() = 0;
+	bool canBeDrawn() const
+	{
+		if (VertexCount == 0 || IndexCount == 0) {
+			os::Printer::log("Can not render an empty vertex buffer (vertex count or index count is null)");
+			return false;
+		}
 
-	//! Get the currently used ID for identification of changes.
-	/** This shouldn't be used for anything outside the VideoDriver. */
-	virtual u32 getChangedID() const = 0;
+		return true;
+	}
+
+	virtual void uploadVertexData(u32 vertexCount, const void *data) = 0;
+
+	virtual void uploadIndexData(u32 indexCount, const void *data) = 0;
+
+	virtual void bind() const = 0;
+
+	virtual void unbind() const = 0;
+
+	virtual void draw(video::IVideoDriver *driver, const video::SMaterial &last_material) const  = 0;
+
+	video::E_VERTEX_TYPE getVertexType() const { return VertexType; }
+
+	bool operator==(const IVertexBuffer *other_buffer)
+	{
+		return (VertexBufferId == other_buffer->VertexBufferId && IndexBufferId == other_buffer->IndexBufferId);
+	}
+
+	u32 VertexBufferId;
+	u32 IndexBufferId;
+
+protected:
+	u32 getPrimitiveCount() const {
+		switch (PrimitiveType) {
+		case scene::EPT_POINTS:
+			return IndexCount;
+		case scene::EPT_LINE_STRIP:
+			return IndexCount - 1;
+		case scene::EPT_LINE_LOOP:
+			return IndexCount;
+		case scene::EPT_LINES:
+			return IndexCount / 2;
+		case scene::EPT_TRIANGLE_STRIP:
+			return (IndexCount - 2);
+		case scene::EPT_TRIANGLE_FAN:
+			return (IndexCount - 2);
+		case scene::EPT_TRIANGLES:
+			return IndexCount / 3;
+		case scene::EPT_POINT_SPRITES:
+			return IndexCount;
+		}
+		return 0;
+	}
+
+	video::E_VERTEX_TYPE VertexType;
+	video::E_INDEX_TYPE IndexType;
+
+	E_HARDWARE_MAPPING MappingHint_Vertex;
+	E_HARDWARE_MAPPING MappingHint_Index;
+
+	u32 VertexCount;
+	u32 IndexCount;
+
+	scene::E_PRIMITIVE_TYPE PrimitiveType;
 };
 
 } // end namespace scene

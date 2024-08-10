@@ -20,112 +20,13 @@
 #include "EVertexAttributes.h"
 #include "CImage.h"
 #include "os.h"
-
-#include "mt_opengl.h"
+#include "VertexBuffer.h"
+#include "VertexType.h"
 
 namespace irr
 {
 namespace video
 {
-struct VertexAttribute
-{
-	enum class Mode
-	{
-		Regular,
-		Normalized,
-		Integral,
-	};
-	int Index;
-	int ComponentCount;
-	GLenum ComponentType;
-	Mode mode;
-	int Offset;
-};
-
-struct VertexType
-{
-	int VertexSize;
-	std::vector<VertexAttribute> Attributes;
-};
-
-static const VertexAttribute *begin(const VertexType &type)
-{
-	return type.Attributes.data();
-}
-
-static const VertexAttribute *end(const VertexType &type)
-{
-	return type.Attributes.data() + type.Attributes.size();
-}
-
-static const VertexType vtStandard = {
-		sizeof(S3DVertex),
-		{
-				{EVA_POSITION, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex, Pos)},
-				{EVA_NORMAL, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex, Normal)},
-				{EVA_COLOR, 4, GL_UNSIGNED_BYTE, VertexAttribute::Mode::Normalized, offsetof(S3DVertex, Color)},
-				{EVA_TCOORD0, 2, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex, TCoords)},
-		},
-};
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Winvalid-offsetof"
-
-static const VertexType vt2TCoords = {
-		sizeof(S3DVertex2TCoords),
-		{
-				{EVA_POSITION, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex2TCoords, Pos)},
-				{EVA_NORMAL, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex2TCoords, Normal)},
-				{EVA_COLOR, 4, GL_UNSIGNED_BYTE, VertexAttribute::Mode::Normalized, offsetof(S3DVertex2TCoords, Color)},
-				{EVA_TCOORD0, 2, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex2TCoords, TCoords)},
-				{EVA_TCOORD1, 2, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex2TCoords, TCoords2)},
-		},
-};
-
-static const VertexType vtTangents = {
-		sizeof(S3DVertexTangents),
-		{
-				{EVA_POSITION, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertexTangents, Pos)},
-				{EVA_NORMAL, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertexTangents, Normal)},
-				{EVA_COLOR, 4, GL_UNSIGNED_BYTE, VertexAttribute::Mode::Normalized, offsetof(S3DVertexTangents, Color)},
-				{EVA_TCOORD0, 2, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertexTangents, TCoords)},
-				{EVA_TANGENT, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertexTangents, Tangent)},
-				{EVA_BINORMAL, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertexTangents, Binormal)},
-		},
-};
-
-#pragma GCC diagnostic pop
-
-static const VertexType &getVertexTypeDescription(E_VERTEX_TYPE type)
-{
-	switch (type) {
-	case EVT_STANDARD:
-		return vtStandard;
-	case EVT_2TCOORDS:
-		return vt2TCoords;
-	case EVT_TANGENTS:
-		return vtTangents;
-	default:
-		assert(false);
-	}
-}
-
-static const VertexType vt2DImage = {
-		sizeof(S3DVertex),
-		{
-				{EVA_POSITION, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex, Pos)},
-				{EVA_COLOR, 4, GL_UNSIGNED_BYTE, VertexAttribute::Mode::Normalized, offsetof(S3DVertex, Color)},
-				{EVA_TCOORD0, 2, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex, TCoords)},
-		},
-};
-
-static const VertexType vtPrimitive = {
-		sizeof(S3DVertex),
-		{
-				{EVA_POSITION, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex, Pos)},
-				{EVA_COLOR, 4, GL_UNSIGNED_BYTE, VertexAttribute::Mode::Normalized, offsetof(S3DVertex, Color)},
-		},
-};
 
 void APIENTRY COpenGL3DriverBase::debugCb(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam)
 {
@@ -482,6 +383,135 @@ void COpenGL3DriverBase::setTransform(E_TRANSFORMATION_STATE state, const core::
 	Transformation3DChanged = true;
 }
 
+scene::IVertexBuffer *COpenGL3DriverBase::createVertexBuffer()
+{
+    scene::COpenGL3VertexBuffer *buffer = new scene::COpenGL3VertexBuffer();
+    return dynamic_cast<scene::IVertexBuffer *>(buffer);
+}
+/*
+//! VAO handling
+void COpenGL3DriverBase::genVAO(u32 &vao_ID)
+{
+	if (vao_ID != 0)
+		return;
+
+	GL.GenVertexArrays(1, &vao_ID);
+}
+
+void COpenGL3DriverBase::deleteVAO(u32 &vao_ID)
+{
+	if (vao_ID == 0)
+		return;
+
+	GL.DeleteVertexArrays(1, &vao_ID);
+}
+
+void COpenGL3DriverBase::bindVAO(u32 vao_ID)
+{
+	GL.BindVertexArray(vao_ID);
+}
+
+void COpenGL3DriverBase::unbindVAO(u32 vao_ID)
+{
+	GL.BindVertexArray(0);
+}
+
+void COpenGL3DriverBase::setupVAOBuffer(const scene::IMeshBuffer *buffer)
+{
+	if (!buffer || (buffer->getHardwareMappingHint_Index() == scene::EHM_NEVER && buffer->getHardwareMappingHint_Vertex() == scene::EHM_NEVER))
+		return;
+
+	SHWBufferLink *HWBuffer = reinterpret_cast<SHWBufferLink *>(buffer->getHWBuffer());
+
+	// Create HWBuffer for the given mesh buffer if it doesn't exist yet
+	if (!HWBuffer) {
+		SHWBufferLink_opengl *new_HWBuffer = new SHWBufferLink_opengl(buffer);
+
+		// add to map
+		new_HWBuffer->listPosition = HWBufferList.insert(HWBufferList.end(), new_HWBuffer);
+
+		new_HWBuffer->ChangedID_Vertex = new_HWBuffer->MeshBuffer->getChangedID_Vertex();
+		new_HWBuffer->ChangedID_Index = new_HWBuffer->MeshBuffer->getChangedID_Index();
+		new_HWBuffer->Mapped_Vertex = buffer->getHardwareMappingHint_Vertex();
+		new_HWBuffer->Mapped_Index = buffer->getHardwareMappingHint_Index();
+		new_HWBuffer->vbo_verticesID = 0;
+		new_HWBuffer->vbo_indicesID = 0;
+		new_HWBuffer->vbo_verticesSize = 0;
+		new_HWBuffer->vbo_indicesSize = 0;
+
+		HWBuffer = new_HWBuffer;
+	}
+
+	if (HWBuffer->Mapped_Vertex != scene::EHM_NEVER) {
+		if (HWBuffer->ChangedID_Vertex != HWBuffer->MeshBuffer->getChangedID_Vertex() || !static_cast<SHWBufferLink_opengl *>(HWBuffer)->vbo_verticesID) {
+
+			HWBuffer->ChangedID_Vertex = HWBuffer->MeshBuffer->getChangedID_Vertex();
+
+			const scene::IMeshBuffer *mb = HWBuffer->MeshBuffer;
+			const void *vertices = mb->getVertices();
+
+			const void *buffer = vertices;
+			size_t bufferSize = getVertexPitchFromType(mb->getVertexType()) * mb->getVertexCount();
+
+			// get or create buffer
+			bool newBuffer = false;
+			if (!HWBuffer->vbo_verticesID) {
+				GL.GenBuffers(1, &HWBuffer->vbo_verticesID);
+				if (!HWBuffer->vbo_verticesID)
+					return false;
+				newBuffer = true;
+			} else if (HWBuffer->vbo_verticesSize < bufferSize) {
+				newBuffer = true;
+			}
+
+			GL.BindBuffer(GL_ARRAY_BUFFER, HWBuffer->vbo_verticesID);
+
+			// copy data to graphics card
+			if (!newBuffer)
+				GL.BufferSubData(GL_ARRAY_BUFFER, 0, bufferSize, buffer);
+			else {
+				HWBuffer->vbo_verticesSize = bufferSize;
+
+				GLenum usage = GL_STATIC_DRAW;
+				if (HWBuffer->Mapped_Index == scene::EHM_STREAM)
+					usage = GL_STREAM_DRAW;
+				else if (HWBuffer->Mapped_Index == scene::EHM_DYNAMIC)
+					usage = GL_DYNAMIC_DRAW;
+				GL.BufferData(GL_ARRAY_BUFFER, bufferSize, buffer, usage);
+			}
+
+			TEST_GL_ERROR(this);
+		}
+	}
+
+	if (HWBuffer->Mapped_Index != scene::EHM_NEVER) {
+		if (HWBuffer->ChangedID_Index != HWBuffer->MeshBuffer->getChangedID_Index() || !static_cast<SHWBufferLink_opengl *>(HWBuffer)->vbo_indicesID) {
+
+			HWBuffer->ChangedID_Index = HWBuffer->MeshBuffer->getChangedID_Index();
+
+			if (!updateIndexHardwareBuffer((SHWBufferLink_opengl *)HWBuffer))
+				return false;
+		}
+	}
+
+	auto &vTypeDesc = getVertexTypeDescription(mb->getVertexType());
+	for (auto attr : vTypeDesc) {
+		GL.EnableVertexAttribArray(attr.Index);
+		switch (attr.mode) {
+		case VertexAttribute::Mode::Regular:
+			GL.VertexAttribPointer(attr.Index, attr.ComponentCount, attr.ComponentType, GL_FALSE, vertexType.VertexSize, reinterpret_cast<void *>(verticesBase + attr.Offset));
+			break;
+		case VertexAttribute::Mode::Normalized:
+			GL.VertexAttribPointer(attr.Index, attr.ComponentCount, attr.ComponentType, GL_TRUE, vertexType.VertexSize, reinterpret_cast<void *>(verticesBase + attr.Offset));
+			break;
+		case VertexAttribute::Mode::Integral:
+			GL.VertexAttribIPointer(attr.Index, attr.ComponentCount, attr.ComponentType, vertexType.VertexSize, reinterpret_cast<void *>(verticesBase + attr.Offset));
+			break;
+		}
+	}
+}
+*/
+
 bool COpenGL3DriverBase::updateVertexHardwareBuffer(SHWBufferLink_opengl *HWBuffer)
 {
 	if (!HWBuffer)
@@ -704,6 +734,29 @@ IRenderTarget *COpenGL3DriverBase::addRenderTarget()
 	return renderTarget;
 }
 
+//! Draws array or elements of the buffer.
+void COpenGL3DriverBase::drawVertexBuffer(const scene::IVertexBuffer *vbuffer)
+{
+	if (!vbuffer)
+		return;
+
+	if (!vbuffer->canBeDrawn())
+		return;
+
+	setRenderStates3DMode();
+
+	vbuffer->bind();
+
+	auto &vTypeDesc = getVertexTypeDescription(vbuffer->getVertexType());
+    setVBOAttributes(vTypeDesc);
+
+	vbuffer->draw(this, LastMaterial);
+
+    unsetVertexAttributes(vTypeDesc);
+
+	vbuffer->unbind();
+}
+
 //! draws a vertex primitive list
 void COpenGL3DriverBase::drawVertexPrimitiveList(const void *vertices, u32 vertexCount,
 		const void *indexList, u32 primitiveCount,
@@ -720,7 +773,7 @@ void COpenGL3DriverBase::drawVertexPrimitiveList(const void *vertices, u32 verte
 	setRenderStates3DMode();
 
 	auto &vTypeDesc = getVertexTypeDescription(vType);
-	beginDraw(vTypeDesc, reinterpret_cast<uintptr_t>(vertices));
+    setVertexAttributes(vTypeDesc, reinterpret_cast<uintptr_t>(vertices));
 	GLenum indexSize = 0;
 
 	switch (iType) {
@@ -733,7 +786,7 @@ void COpenGL3DriverBase::drawVertexPrimitiveList(const void *vertices, u32 verte
 #ifndef GL_UNSIGNED_INT
 #define GL_UNSIGNED_INT 0x1405
 #endif
-		if (FeatureAvailable[COGLESCoreExtensionHandler::IRR_GL_OES_element_index_uint])
+		if (driver->queryOpenGLFeature(COGLESCoreExtensionHandler::IRR_GL_OES_element_index_uint))
 			indexSize = GL_UNSIGNED_INT;
 		else
 #endif
@@ -771,7 +824,7 @@ void COpenGL3DriverBase::drawVertexPrimitiveList(const void *vertices, u32 verte
 		break;
 	}
 
-	endDraw(vTypeDesc);
+    unsetVertexAttributes(vTypeDesc);
 }
 
 void COpenGL3DriverBase::draw2DImage(const video::ITexture *texture, const core::position2d<s32> &destPos,
@@ -1065,39 +1118,57 @@ void COpenGL3DriverBase::drawQuad(const VertexType &vertexType, const S3DVertex 
 
 void COpenGL3DriverBase::drawArrays(GLenum primitiveType, const VertexType &vertexType, const void *vertices, int vertexCount)
 {
-	beginDraw(vertexType, reinterpret_cast<uintptr_t>(vertices));
+    setVertexAttributes(vertexType, reinterpret_cast<uintptr_t>(vertices));
 	GL.DrawArrays(primitiveType, 0, vertexCount);
-	endDraw(vertexType);
+    unsetVertexAttributes(vertexType);
 }
 
 void COpenGL3DriverBase::drawElements(GLenum primitiveType, const VertexType &vertexType, const void *vertices, int vertexCount, const u16 *indices, int indexCount)
 {
-	beginDraw(vertexType, reinterpret_cast<uintptr_t>(vertices));
+    setVertexAttributes(vertexType, reinterpret_cast<uintptr_t>(vertices));
 	GL.DrawRangeElements(primitiveType, 0, vertexCount - 1, indexCount, GL_UNSIGNED_SHORT, indices);
-	endDraw(vertexType);
+    unsetVertexAttributes(vertexType);
 }
 
-void COpenGL3DriverBase::beginDraw(const VertexType &vertexType, uintptr_t verticesBase)
+void COpenGL3DriverBase::setVertexAttributes(const VertexType &vertexType, uintptr_t verticesBase)
 {
-	for (auto attr : vertexType) {
+    for (auto &attr : vertexType.Attributes) {
+        GL.EnableVertexAttribArray(attr.Index);
+        switch (attr.mode) {
+        case VertexAttribute::Mode::Regular:
+            GL.VertexAttribPointer(attr.Index, attr.ComponentCount, attr.ComponentType, GL_FALSE, vertexType.VertexSize, reinterpret_cast<void *>(verticesBase + attr.Offset));
+            break;
+        case VertexAttribute::Mode::Normalized:
+            GL.VertexAttribPointer(attr.Index, attr.ComponentCount, attr.ComponentType, GL_TRUE, vertexType.VertexSize, reinterpret_cast<void *>(verticesBase + attr.Offset));
+            break;
+        case VertexAttribute::Mode::Integral:
+            GL.VertexAttribIPointer(attr.Index, attr.ComponentCount, attr.ComponentType, vertexType.VertexSize, reinterpret_cast<void *>(verticesBase + attr.Offset));
+            break;
+        }
+    }
+}
+
+void COpenGL3DriverBase::setVBOAttributes(const VertexType &vertexType)
+{
+	for (auto &attr : vertexType.Attributes) {
 		GL.EnableVertexAttribArray(attr.Index);
 		switch (attr.mode) {
 		case VertexAttribute::Mode::Regular:
-			GL.VertexAttribPointer(attr.Index, attr.ComponentCount, attr.ComponentType, GL_FALSE, vertexType.VertexSize, reinterpret_cast<void *>(verticesBase + attr.Offset));
+			GL.VertexAttribPointer(attr.Index, attr.ComponentCount, attr.ComponentType, GL_FALSE, vertexType.VertexSize, (void*)attr.Offset);
 			break;
 		case VertexAttribute::Mode::Normalized:
-			GL.VertexAttribPointer(attr.Index, attr.ComponentCount, attr.ComponentType, GL_TRUE, vertexType.VertexSize, reinterpret_cast<void *>(verticesBase + attr.Offset));
+			GL.VertexAttribPointer(attr.Index, attr.ComponentCount, attr.ComponentType, GL_TRUE, vertexType.VertexSize, (void*)attr.Offset);
 			break;
 		case VertexAttribute::Mode::Integral:
-			GL.VertexAttribIPointer(attr.Index, attr.ComponentCount, attr.ComponentType, vertexType.VertexSize, reinterpret_cast<void *>(verticesBase + attr.Offset));
+			GL.VertexAttribIPointer(attr.Index, attr.ComponentCount, attr.ComponentType, vertexType.VertexSize, (void*)attr.Offset);
 			break;
 		}
 	}
 }
 
-void COpenGL3DriverBase::endDraw(const VertexType &vertexType)
+void COpenGL3DriverBase::unsetVertexAttributes(const VertexType &vertexType)
 {
-	for (auto attr : vertexType)
+	for (auto &attr : vertexType.Attributes)
 		GL.DisableVertexAttribArray(attr.Index);
 }
 

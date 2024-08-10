@@ -19,24 +19,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "noise.h"
 #include "log.h"
 
-
-/*bool TileInfo::operator==(const TileInfo &other_info)
-{
-	if (tex != other_info.tex)
-		return false;
-
-	if (anim.frame_count != other_info.anim.frame_count ||
-		anim.frame_length_ms != other_info.anim.frame_length_ms)
-		return false;
-
-	for (int i = 0; i < anim.frame_count; i++)
-		if (anim.frames[i] != other_info.anim.frames[i])
-			return false;
-
-	return true;
-}*/
-
-
 TextureAtlas::TextureAtlas(video::IVideoDriver *vdrv, ITextureSource *src, std::vector<TileLayer*> &layers)//, v3s16 blockpos)
 {
 	m_driver = vdrv;
@@ -62,20 +44,6 @@ TextureAtlas::TextureAtlas(video::IVideoDriver *vdrv, ITextureSource *src, std::
 
 		if (is_layer_collected)
 			continue;
-		/*if (layer->material_flags & MATERIAL_FLAG_CRACK) {
-			std::ostringstream os(std::ios::binary);
-			os << m_tsrc->getTextureName(layer->texture_id) << "^[crack";
-			if (layer->material_flags & MATERIAL_FLAG_CRACK_OVERLAY)
-				os << "o";
-			u8 tiles = layer->scale;
-			if (tiles > 1)
-				os << ":" << (u32)tiles;
-			os << ":" << (u32)layer->animation_frame_count << ":";
-			tile_info.crack_modifier = os.str();
-			tile_info.crack_texture = m_tsrc->getTextureForMesh(
-					os.str() + "0",
-					&layer->texture_id);
-		}*/
 
 		TileInfo tile_info;
 
@@ -229,8 +197,13 @@ void TextureAtlas::updateAnimations(f32 time)
 
 void TextureAtlas::updateCrackAnimations(int new_crack)
 {
-	// No any cracked mapblocks
-	if (m_crack_tiles.empty()) {
+	//infostream << "updateCrackAnimations() 1" << std::endl;
+	// No crack animation so far
+	MutexAutoLock crack_tiles_lock(m_crack_tiles_mutex);
+	//infostream << "updateCrackAnimations() 2" << std::endl;
+
+	if (new_crack == -1) {
+        m_crack_tiles.clear();
 		m_last_crack = -1;
 		return;
 	}
@@ -257,10 +230,13 @@ void TextureAtlas::updateCrackAnimations(int new_crack)
 			m_atlas_texture->drawToSubImage(tile.x + atlas_size.Width/2, tile.y, tile.width, tile.height, new_texture);
 		}
 	}
+	infostream << "updateCrackAnimations() 3" << std::endl;
+	infostream << "updateCrackAnimations() 4" << std::endl;
 
 	if (m_driver->getTextureCreationFlag(video::ETCF_CREATE_MIP_MAPS) && has_crack_tiles) {
 		// Each tile in both sides of the atlas must have not less 2 pixels in a mip
 		u32 min_pixels_count = m_tiles_infos.size()*8;
 		m_atlas_texture->regenerateMipMapLevels(0, 0, min_pixels_count);
 	}
+	infostream << "updateCrackAnimations() 5" << std::endl;
 }

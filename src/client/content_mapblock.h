@@ -23,7 +23,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <IMeshManipulator.h>
 
 struct MeshMakeData;
-struct MeshCollector;
+class MeshCollector;
 
 struct LightPair {
 	u8 lightDay;
@@ -62,7 +62,7 @@ class MapblockMeshGenerator
 {
 public:
 	MapblockMeshGenerator(MeshMakeData *input, MeshCollector *output,
-			scene::IMeshManipulator *mm);
+		scene::IMeshManipulator *mm);
 	void generate();
 	void renderSingle(content_t node, u8 param2 = 0x00);
 

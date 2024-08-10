@@ -26,7 +26,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "dummygamedef.h"
 #include "client/content_mapblock.h"
 #include "client/mapblock_mesh.h"
-#include "client/meshgen/collector.h"
+#include "client/mesh_collector.h"
 #include "mesh_compare.h"
 #include "util/directiontables.h"
 
@@ -189,13 +189,12 @@ void TestMapblockMeshGenerator::testSimpleNode()
 	MeshMakeData data = gamedef.makeSingleNodeMMD();
 	data.m_vmanip.setNode({0, 0, 0}, {stone, 0, 0});
 
-	MeshCollector col{{}};
+	WieldMeshCollector col{{}};
 	MapblockMeshGenerator mg{&data, &col, nullptr};
 	mg.generate();
-	UASSERTEQ(std::size_t, col.prebuffers[0].size(), 1);
-	UASSERTEQ(std::size_t, col.prebuffers[1].size(), 0);
+	UASSERTEQ(std::size_t, col.prebuffers.size(), 1);
 
-	auto &&buf = col.prebuffers[0][0];
+	auto &&buf = col.prebuffers[0];
 	UASSERTEQ(u32, buf.layer.texture_id, 42);
 	UASSERT(checkMeshEqual(buf.vertices, buf.indices, {quad::xn, quad::xp, quad::yn, quad::yp, quad::zn, quad::zp}));
 }
@@ -211,13 +210,12 @@ void TestMapblockMeshGenerator::testSurroundedNode()
 	data.m_vmanip.setNode({0, 0, 0}, {stone, 0, 0});
 	data.m_vmanip.setNode({1, 0, 0}, {wood, 0, 0});
 
-	MeshCollector col{{}};
+	WieldMeshCollector col{{}};
 	MapblockMeshGenerator mg{&data, &col, nullptr};
 	mg.generate();
-	UASSERTEQ(std::size_t, col.prebuffers[0].size(), 1);
-	UASSERTEQ(std::size_t, col.prebuffers[1].size(), 0);
+	UASSERTEQ(std::size_t, col.prebuffers.size(), 1);
 
-	auto &&buf = col.prebuffers[0][0];
+	auto &&buf = col.prebuffers[0];
 	UASSERTEQ(u32, buf.layer.texture_id, 42);
 	UASSERT(checkMeshEqual(buf.vertices, buf.indices, {quad::xn, quad::yn, quad::yp, quad::zn, quad::zp}));
 }
@@ -232,13 +230,12 @@ void TestMapblockMeshGenerator::testInterliquidSame()
 	data.m_vmanip.setNode({0, 0, 0}, {water, 0, 0});
 	data.m_vmanip.setNode({1, 0, 0}, {water, 0, 0});
 
-	MeshCollector col{{}};
+	WieldMeshCollector col{{}};
 	MapblockMeshGenerator mg{&data, &col, nullptr};
 	mg.generate();
-	UASSERTEQ(std::size_t, col.prebuffers[0].size(), 1);
-	UASSERTEQ(std::size_t, col.prebuffers[1].size(), 0);
+	UASSERTEQ(std::size_t, col.prebuffers.size(), 1);
 
-	auto &&buf = col.prebuffers[0][0];
+	auto &&buf = col.prebuffers[0];
 	UASSERTEQ(u32, buf.layer.texture_id, 42);
 	UASSERT(checkMeshEqual(buf.vertices, buf.indices, {quad::xn, quad::yn, quad::yp, quad::zn, quad::zp}));
 }
@@ -254,13 +251,12 @@ void TestMapblockMeshGenerator::testInterliquidDifferent()
 	data.m_vmanip.setNode({0, 0, 0}, {water, 0, 0});
 	data.m_vmanip.setNode({0, 0, 1}, {lava, 0, 0});
 
-	MeshCollector col{{}};
+	WieldMeshCollector col{{}};
 	MapblockMeshGenerator mg{&data, &col, nullptr};
 	mg.generate();
-	UASSERTEQ(std::size_t, col.prebuffers[0].size(), 1);
-	UASSERTEQ(std::size_t, col.prebuffers[1].size(), 0);
+	UASSERTEQ(std::size_t, col.prebuffers.size(), 1);
 
-	auto &&buf = col.prebuffers[0][0];
+	auto &&buf = col.prebuffers[0];
 	UASSERTEQ(u32, buf.layer.texture_id, 42);
 	UASSERT(checkMeshEqual(buf.vertices, buf.indices, {quad::xn, quad::xp, quad::yn, quad::yp, quad::zn, quad::zp}));
 }

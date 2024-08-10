@@ -38,6 +38,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "porting.h"
 #include <algorithm>
 #include "client/renderingengine.h"
+#include "light_colors.h"
 
 /*
 	ClientEnvironment
@@ -89,6 +90,7 @@ void ClientEnvironment::setLocalPlayer(LocalPlayer *player)
 
 void ClientEnvironment::step(float dtime)
 {
+	// << "ClientEnvironment::step() 1" << std::endl;
 	/* Step time of day */
 	stepTimeOfDay(dtime);
 
@@ -199,7 +201,7 @@ void ClientEnvironment::step(float dtime)
 		lplayer->move(dtime_part, this, position_max_increment,
 			&player_collisions);
 	}
-
+	//infostream << "ClientEnvironment::step() 2" << std::endl;
 	bool player_immortal = false;
 	f32 player_fall_factor = 1.0f;
 	GenericCAO *playercao = lplayer->getCAO();
@@ -210,7 +212,7 @@ void ClientEnvironment::step(float dtime)
 		// convert armor group into an usable fall damage factor
 		player_fall_factor = 1.0f + (float)addp_p / 100.0f;
 	}
-
+	//infostream << "ClientEnvironment::step() 3" << std::endl;
 	for (const CollisionInfo &info : player_collisions) {
 		v3f speed_diff = info.new_speed - info.old_speed;;
 		// Handle only fall damage
@@ -244,10 +246,10 @@ void ClientEnvironment::step(float dtime)
 			}
 		}
 	}
-
+	//infostream << "ClientEnvironment::step() 4" << std::endl;
 	if (m_client->modsLoaded())
 		m_script->environment_step(dtime);
-
+	//infostream << "ClientEnvironment::step() 5" << std::endl;
 	// Update lighting on local player (used for wield item)
 	u32 day_night_ratio = getDayNightRatio();
 	{
@@ -264,7 +266,7 @@ void ClientEnvironment::step(float dtime)
 		lplayer->light_color = encode_light(light, 0); // this transfers light.alpha
 		final_color_blend(&lplayer->light_color, light, day_night_ratio);
 	}
-
+	//infostream << "ClientEnvironment::step() 6" << std::endl;
 	/*
 		Step active objects and update lighting of them
 	*/
@@ -279,7 +281,7 @@ void ClientEnvironment::step(float dtime)
 	};
 
 	m_ao_manager.step(dtime, cb_state);
-
+	//infostream << "ClientEnvironment::step() 7" << std::endl;
 	/*
 		Step and handle simple objects
 	*/
@@ -296,16 +298,21 @@ void ClientEnvironment::step(float dtime)
 			++i;
 		}
 	}
-
+	//infostream << "ClientEnvironment::step() 8" << std::endl;
 	/*
 	 * Draw new animations frames in the atlas
 	 */
 	TextureAtlas *atlas = m_client->getNodeDefManager()->getAtlas();
+	//infostream << "ClientEnvironment::step() 8.1" << std::endl;
 
 	if (atlas) {
+		//infostream << "ClientEnvironment::step() 8.2" << std::endl;
 		atlas->updateCrackAnimations(m_client->getCrackLevel());
+		//infostream << "ClientEnvironment::step() 8.3" << std::endl;
 		atlas->updateAnimations(m_client->getAnimationTime());
+		//infostream << "ClientEnvironment::step() 8.4" << std::endl;
 	}
+	//infostream << "ClientEnvironment::step() 9" << std::endl;
 }
 
 void ClientEnvironment::addSimpleObject(ClientSimpleObject *simple)

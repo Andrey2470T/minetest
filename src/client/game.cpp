@@ -79,6 +79,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "hud.h"
 #include "clientdynamicinfo.h"
 #include <IAnimatedMeshSceneNode.h>
+#include "light_colors.h"
 
 #if USE_SOUND
 	#include "client/sound/sound_openal.h"
@@ -647,12 +648,12 @@ struct GameRunData {
 	float jump_timer_down_before; // from key down until key down again
 
 	float damage_flash;
-	float update_draw_list_timer;
-	float touch_blocks_timer;
+	float octree_rebuild_timer;
+	float update_meshes_timer;
 
 	f32 fog_range;
 
-	v3f update_draw_list_last_cam_dir;
+	//v3f update_draw_list_last_cam_dir;
 
 	float time_of_day_smooth;
 };
@@ -1170,11 +1171,12 @@ void Game::run()
 	while (m_rendering_engine->run()
 			&& !(*kill || g_gamecallback->shutdown_requested
 			|| (server && server->isShutdownRequested()))) {
-
+		//infostream << "run() 1" << std::endl;
 		// Calculate dtime =
 		//    m_rendering_engine->run() from this iteration
 		//  + Sleep time until the wanted FPS are reached
 		draw_times.limit(device, &dtime, g_menumgr.pausesGame());
+	//infostream << "run() 1" << std::endl;
 
 		const auto current_dynamic_info = ClientDynamicInfo::getCurrent();
 		if (!current_dynamic_info.equal(client_display_info)) {
@@ -1192,19 +1194,24 @@ void Game::run()
 		// Prepare render data for next iteration
 
 		updateStats(&stats, draw_times, dtime);
+		//infostream << "run() 1.1" << std::endl;
 		updateInteractTimers(dtime);
+		//infostream << "run() 1.2" << std::endl;
 
 		if (!checkConnection())
 			break;
 		if (!handleCallbacks())
 			break;
+		//infostream << "run() 1.3" << std::endl;
 
 		processQueues();
+		//infostream << "run() 1.4" << std::endl;
 
 		m_game_ui->clearInfoText();
 
 		updateProfilers(stats, draw_times, dtime);
 		processUserInput(dtime);
+		//infostream << "run() 1.5" << std::endl;
 		// Update camera before player movement to avoid camera lag of one frame
 		updateCameraDirection(&cam_view_target, dtime);
 		cam_view.camera_yaw += (cam_view_target.camera_yaw -
@@ -1213,23 +1220,33 @@ void Game::run()
 				cam_view.camera_pitch) * m_cache_cam_smoothing;
 		updatePlayerControl(cam_view);
 
+		//infostream << "run() 1.6" << std::endl;
 		updatePauseState();
+		//infostream << "run() 1.7" << std::endl;
 		if (m_is_paused)
 			dtime = 0.0f;
 
+		//infostream << "run() 1.8" << std::endl;
 		step(dtime);
+		//infostream << "run() 1.9" << std::endl;
 
 		processClientEvents(&cam_view_target);
 		updateDebugState();
+		//infostream << "before updateCamera()" << std::endl;
 		updateCamera(dtime);
+		//infostream << "after updateCamera()" << std::endl;
 		updateSound(dtime);
 		processPlayerInteraction(dtime, m_game_ui->m_flags.show_hud);
+		//infostream << "run() 2" << std::endl;
 		updateFrame(&graph, &stats, dtime, cam_view);
+		//infostream << "run() 3" << std::endl;
 		updateProfilerGraphs(&graph);
+		//infostream << "run() 4" << std::endl;
 
 		if (m_does_lost_focus_pause_game && !device->isWindowFocused() && !isMenuActive()) {
 			showPauseMenu();
 		}
+		//infostream << "run() 5" << std::endl;
 	}
 
 	RenderingEngine::autosaveScreensizeAndCo(initial_screen_size, initial_window_maximized);
@@ -1446,7 +1463,7 @@ void Game::copyServerClientCache()
 {
 	// It would be possible to let the client directly read the media files
 	// from where the server knows they are. But aside from being more complicated
-	// it would also *not* fill the media cache and cause slower joining of 
+	// it would also *not* fill the media cache and cause slower joining of
 	// remote servers.
 	// (Imagine that you launch a game once locally and then connect to a server.)
 
@@ -2765,7 +2782,9 @@ void Game::updatePauseState()
 
 inline void Game::step(f32 dtime)
 {
+	//infostream << "step() 1" << std::endl;
 	if (server) {
+		//infostream << "step() 2" << std::endl;
 		float fps_max = (!device->isWindowFocused() || g_menumgr.pausesGame()) ?
 				g_settings->getFloat("fps_max_unfocused") :
 				g_settings->getFloat("fps_max");
@@ -2783,11 +2802,16 @@ inline void Game::step(f32 dtime)
 				m_is_paused
 			});
 
+		//infostream << "step() 3" << std::endl;
 		server->step();
+		//infostream << "step() 4" << std::endl;
 	}
 
-	if (!m_is_paused)
+	if (!m_is_paused) {
+		//infostream << "step() 5" << std::endl;
 		client->step(dtime);
+		//infostream << "step() 6" << std::endl;
+	}
 }
 
 static void pauseNodeAnimation(PausedNodesList &paused, scene::ISceneNode *node) {
@@ -4161,16 +4185,31 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 		Update block draw list every 200ms or when camera direction has
 		changed much
 	*/
-	runData.update_draw_list_timer += dtime;
-	runData.touch_blocks_timer += dtime;
+	/*runData.octree_rebuild_timer += dtime;
+	runData.update_meshes_timer += dtime;
+	//runData.touch_blocks_timer += dtime;
 
-	float update_draw_list_delta = 0.2f;
+	float octree_rebuild_delta = 0.2f;
+	float update_meshes_delta = 0.05f;
 
-	v3f camera_direction = camera->getDirection();
+	ClientMap &clientmap = client->getEnv().getClientMap();
+
+	if (runData.octree_rebuild_timer >= octree_rebuild_delta) {
+		clientmap.rebuildOctree();
+		clientmap.touchMapBlocks();
+		runData.octree_rebuild_timer = 0;
+	}
+	if (runData.update_meshes_timer > update_meshes_delta) {
+		clientmap.frustumCull();
+		clientmap.updateDrawBuffers();
+		clientmap.updateLighting(client->getEnv().getDayNightRatio());
+		runData.update_meshes_timer = 0;
+	}*/
+	//v3f camera_direction = camera->getDirection();
 
 	// call only one of updateDrawList, touchMapBlocks, or updateShadow per frame
 	// (the else-ifs below are intentional)
-	if (runData.update_draw_list_timer >= update_draw_list_delta
+	/*if (runData.update_draw_list_timer >= update_draw_list_delta
 			|| runData.update_draw_list_last_cam_dir.getDistanceFrom(camera_direction) > 0.2
 			|| m_camera_offset_changed
 			|| client->getEnv().getClientMap().needsUpdateDrawList()) {
@@ -4182,7 +4221,7 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 		runData.touch_blocks_timer = 0;
 	} else if (RenderingEngine::get_shadow_renderer()) {
 		updateShadows();
-	}
+	}*/
 
 	m_game_ui->update(*stats, client, draw_control, cam, runData.pointed_old, gui_chat_console, dtime);
 

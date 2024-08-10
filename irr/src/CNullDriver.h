@@ -17,6 +17,7 @@
 #include "S3DVertex.h"
 #include "SVertexIndex.h"
 #include "SExposedVideoData.h"
+#include "IVertexBuffer.h"
 #include <list>
 
 namespace irr
@@ -56,6 +57,9 @@ public:
 
 	//! sets transformation
 	void setTransform(E_TRANSFORMATION_STATE state, const core::matrix4 &mat) override;
+
+	//! create the vertex buffer
+	scene::IVertexBuffer *createVertexBuffer() override;
 
 	//! Retrieve the number of image loaders
 	u32 getImageLoaderCount() const override;
@@ -101,6 +105,9 @@ public:
 
 	//! gets the area of the current viewport
 	const core::rect<s32> &getViewPort() const override;
+
+	//! Draws array or elements of the buffer.
+	virtual void drawVertexBuffer(const scene::IVertexBuffer *vbuffer) override;
 
 	//! draws a vertex primitive list
 	virtual void drawVertexPrimitiveList(const void *vertices, u32 vertexCount,

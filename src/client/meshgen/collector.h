@@ -37,7 +37,7 @@ struct PreMeshBuffer
 
 struct MeshCollector
 {
-	std::array<std::vector<PreMeshBuffer>, MAX_TILE_LAYERS> prebuffers;
+	std::vector<PreMeshBuffer> prebuffers;
 	// bounding sphere radius and center
 	f32 m_bounding_radius_sq = 0.0f;
 	v3f m_center_pos;
@@ -56,7 +56,7 @@ struct MeshCollector
 			v3f pos, video::SColor c, u8 light_source);
 
 private:
-	void append(const TileLayer &material,
+	/*void append(const TileLayer &material,
 			const video::S3DVertex *vertices, u32 numVertices,
 			const u16 *indices, u32 numIndices,
 			u8 layernum, bool use_scale = false);
@@ -64,7 +64,7 @@ private:
 			const video::S3DVertex *vertices, u32 numVertices,
 			const u16 *indices, u32 numIndices,
 			v3f pos, video::SColor c, u8 light_source,
-			u8 layernum, bool use_scale = false);
+			u8 layernum, bool use_scale = false);*/
 
-	PreMeshBuffer &findBuffer(const TileLayer &layer, u8 layernum, u32 numVertices);
+	PreMeshBuffer &findBuffer(const TileLayer &layer, u32 numVertices);
 };

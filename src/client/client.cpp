@@ -408,6 +408,7 @@ void Client::connect(const Address &address, const std::string &address_name,
 
 void Client::step(float dtime)
 {
+	//infostream << "Client::step() 1" << std::endl;
 	// Limit a bit
 	if (dtime > DTIME_LIMIT)
 		dtime = DTIME_LIMIT;
@@ -419,7 +420,7 @@ void Client::step(float dtime)
 	m_time_of_day_update_timer += dtime;
 
 	ReceiveAll();
-
+	//infostream << "Client::step() 1" << std::endl;
 	/*
 		Packet counter
 	*/
@@ -438,7 +439,7 @@ void Client::step(float dtime)
 			m_packetcounter.clear();
 		}
 	}
-
+	//infostream << "Client::step() 2" << std::endl;
 	// UGLY hack to fix 2 second startup delay caused by non existent
 	// server client startup synchronization in local server or singleplayer mode
 	static bool initial_step = true;
@@ -460,7 +461,7 @@ void Client::step(float dtime)
 		// Not connected, return
 		return;
 	}
-
+	//infostream << "Client::step() 3" << std::endl;
 	/*
 		Do stuff if connected
 	*/
@@ -507,7 +508,7 @@ void Client::step(float dtime)
 			++i;
 		}
 	}
-
+	//infostream << "Client::step() 4" << std::endl;
 	/*
 		Send pending messages on out chat queue
 	*/
@@ -515,7 +516,7 @@ void Client::step(float dtime)
 		sendChatMessage(m_out_chat_queue.front());
 		m_out_chat_queue.pop();
 	}
-
+	//infostream << "Client::step() 5" << std::endl;
 	/*
 		Handle environment
 	*/
@@ -524,7 +525,7 @@ void Client::step(float dtime)
 	// Step environment (also handles player controls)
 	m_env.step(dtime);
 	m_sound->step(dtime);
-
+	//infostream << "Client::step() 6" << std::endl;
 	/*
 		Get events
 	*/
@@ -545,7 +546,7 @@ void Client::step(float dtime)
 			m_client_event_queue.push(event);
 		}
 	}
-
+	//infostream << "Client::step() 7" << std::endl;
 	/*
 		Print some info
 	*/
@@ -570,7 +571,7 @@ void Client::step(float dtime)
 			sendPlayerPos();
 		}
 	}
-
+	//infostream << "Client::step() 8" << std::endl;
 	/*
 		Replace updated meshes
 	*/
@@ -588,13 +589,13 @@ void Client::step(float dtime)
 
 			MapSector *sector = m_env.getMap().emergeSector(v2s16(r.p.X, r.p.Z));
 
-			MapBlock *block = sector->getBlockNoCreateNoEx(r.p.Y);
-
 			// The block in question is not visible (perhaps it is culled at the server),
 			// create a blank block just to hold the chunk's mesh.
 			// If the block becomes visible later it will replace the blank block.
+			MapBlock *block = sector->getBlockNoCreateNoEx(r.p.Y);
+
 			if (!block && r.mesh)
-				block = sector->createBlankBlock(r.p.Y);
+				block = m_env.getMap().emergeBlock(r.p);
 
 			if (block) {
 				// Delete the old mesh
@@ -607,19 +608,20 @@ void Client::step(float dtime)
 					if (minimap_mapblocks.empty())
 						do_mapper_update = false;
 
-					bool is_empty = true;
-					for (int l = 0; l < MAX_TILE_LAYERS; l++)
-						if (r.mesh->getMesh(l)->getMeshBufferCount() != 0)
-							is_empty = false;
+                    //bool is_empty = true;
+                    //if (r.mesh->getBuffers().size() != 0)
+					//for (int l = 0; l < MAX_TILE_LAYERS; l++)
+					//	if (r.mesh->getMesh(l)->getMeshBufferCount() != 0)
+                        //is_empty = false;
 
-					if (is_empty)
-						delete r.mesh;
-					else {
+                    //if (is_empty)
+                        //delete r.mesh;
+                    //else {
 						// Replace with the new mesh
 						block->mesh = r.mesh;
 						if (r.urgent)
 							force_update_shadows = true;
-					}
+
 				}
 			} else {
 				delete r.mesh;
@@ -663,7 +665,7 @@ void Client::step(float dtime)
 		if (shadow_renderer && force_update_shadows)
 			shadow_renderer->setForceUpdateShadowMap();
 	}
-
+	//infostream << "Client::step() 9" << std::endl;
 	/*
 		Load fetched media
 	*/
@@ -697,7 +699,7 @@ void Client::step(float dtime)
 		if (!done.empty())
 			sendHaveMedia(done);
 	}
-
+	//infostream << "Client::step() 10" << std::endl;
 	/*
 		If the server didn't update the inventory in a while, revert
 		the local inventory (so the player notices the lag problem
@@ -718,7 +720,7 @@ void Client::step(float dtime)
 			m_update_wielded_item = true;
 		}
 	}
-
+	//infostream << "Client::step() 11" << std::endl;
 	/*
 		Update positions of sounds attached to objects
 	*/
@@ -733,7 +735,7 @@ void Client::step(float dtime)
 					cao->getVelocity() * (1.0f/BS));
 		}
 	}
-
+	//infostream << "Client::step() 12" << std::endl;
 	/*
 		Handle removed remotely initiated sounds
 	*/
@@ -762,7 +764,7 @@ void Client::step(float dtime)
 			sendRemovedSounds(removed_server_ids);
 		}
 	}
-
+	//infostream << "Client::step() 13" << std::endl;
 	// Write changes to the mod storage
 	m_mod_storage_save_timer -= dtime;
 	if (m_mod_storage_save_timer <= 0.0f) {
@@ -777,6 +779,7 @@ void Client::step(float dtime)
 		m_localdb->endSave();
 		m_localdb->beginSave();
 	}
+	//infostream << "Client::step() 14" << std::endl;
 }
 
 bool Client::loadMedia(const std::string &data, const std::string &filename,

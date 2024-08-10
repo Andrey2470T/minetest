@@ -25,7 +25,6 @@ endif()
 
 set(client_SRCS
 	${sound_SRCS}
-	${CMAKE_CURRENT_SOURCE_DIR}/meshgen/collector.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/render/anaglyph.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/render/core.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/render/factory.cpp
@@ -57,10 +56,13 @@ set(client_SRCS
 	${CMAKE_CURRENT_SOURCE_DIR}/inputhandler.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/joystick_controller.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/keycode.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/light_colors.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/localplayer.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/mapblock_mesh.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/mesh.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/mesh_collector.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/mesh_generator_thread.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/mesh_storage.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/minimap.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/particles.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/renderingengine.cpp

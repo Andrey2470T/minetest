@@ -213,6 +213,10 @@ void COGLES1Driver::setTransform(E_TRANSFORMATION_STATE state, const core::matri
 	}
 }
 
+IVertexBuffer *COGLES1Driver::createVertexBuffer()
+{
+}
+
 bool COGLES1Driver::updateVertexHardwareBuffer(SHWBufferLink_opengl *HWBuffer)
 {
 	if (!HWBuffer)
@@ -464,6 +468,11 @@ IRenderTarget *COGLES1Driver::addRenderTarget()
 static inline u8 *buffer_offset(const long offset)
 {
 	return ((u8 *)0 + offset);
+}
+
+//! Draws array or elements of the buffer.
+void COGLES1Driver::drawVertexBuffer(const scene::IVertexBuffer *vbuffer)
+{
 }
 
 //! draws a vertex primitive list

@@ -17,6 +17,7 @@
 #include "EDriverFeatures.h"
 #include "SExposedVideoData.h"
 #include "SOverrideMaterial.h"
+#include "IVertexBuffer.h"
 
 namespace irr
 {
@@ -125,6 +126,19 @@ and methods to make the programmer's life easier.
 class IVideoDriver : public virtual IReferenceCounted
 {
 public:
+	//! VAO handling
+	/*virtual void genVAO(u32 &vao_ID) = 0;
+
+	virtual void deleteVAO(u32 &vao_ID) = 0;
+
+	virtual void bindVAO(u32 vao_ID) = 0;
+
+	virtual void unbindVAO(u32 vao_ID) = 0;
+
+	virtual void setupVAOBuffer(const scene::IMeshBuffer *buffer) = 0;
+
+	virtual void renderVAOBuffer(const scene::IMeshBuffer *buffer) = 0;*/
+
 	//! Applications must call this method before performing any rendering.
 	/** This method can clear the back- and the z-buffer.
 	\param clearFlag A combination of the E_CLEAR_BUFFER_FLAG bit-flags.
@@ -206,6 +220,9 @@ public:
 	world, or projection.
 	\param mat Matrix describing the transformation. */
 	virtual void setTransform(E_TRANSFORMATION_STATE state, const core::matrix4 &mat) = 0;
+
+	//! create the vertex buffer
+	virtual scene::IVertexBuffer *createVertexBuffer() = 0;
 
 	//! Returns the transformation set by setTransform
 	/** \param state Transformation type to query
@@ -513,6 +530,8 @@ public:
 	/** \return Rectangle of the current viewport. */
 	virtual const core::rect<s32> &getViewPort() const = 0;
 
+	//! Draws array or elements of the buffer.
+	virtual void drawVertexBuffer(const scene::IVertexBuffer *vbuffer) = 0;
 	//! Draws a vertex primitive list
 	/** Note that, depending on the index type, some vertices might be not
 	accessible through the index list. The limit is at 65535 vertices for 16bit

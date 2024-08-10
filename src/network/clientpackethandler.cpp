@@ -307,29 +307,16 @@ void Client::handleCommand_BlockData(NetworkPacket* pkt)
 	std::istringstream istr(datastring, std::ios_base::binary);
 
 	MapSector *sector;
-	MapBlock *block;
 
 	v2s16 p2d(p.X, p.Z);
 	sector = m_env.getMap().emergeSector(p2d);
 
 	assert(sector->getPos() == p2d);
 
-	block = sector->getBlockNoCreateNoEx(p.Y);
-	if (block) {
-		/*
-			Update an existing block
-		*/
-		block->deSerialize(istr, m_server_ser_ver, false);
-		block->deSerializeNetworkSpecific(istr);
-	}
-	else {
-		/*
-			Create a new block
-		*/
-		block = sector->createBlankBlock(p.Y);
-		block->deSerialize(istr, m_server_ser_ver, false);
-		block->deSerializeNetworkSpecific(istr);
-	}
+	MapBlock *block = m_env.getMap().emergeBlock(p);
+
+	block->deSerialize(istr, m_server_ser_ver, false);
+	block->deSerializeNetworkSpecific(istr);
 
 	if (m_localdb) {
 		ServerMap::saveBlock(block, m_localdb);
