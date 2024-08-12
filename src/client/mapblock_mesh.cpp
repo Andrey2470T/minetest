@@ -610,7 +610,7 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data, v3s16 camera_offs
 
 	m_storage->addArrays(collector);
 
-	infostream << "MapBlockMesh() count of mapblock triangles: " << mesh_info.transparent_triangles.size() << std::endl;
+	//infostream << "MapBlockMesh() count of mapblock triangles: " << mesh_info.transparent_triangles.size() << std::endl;
 	m_transparent_triangles = mesh_info.transparent_triangles;
 	m_mesh = mesh_info.layers_to_arrays_map;
 	//mapblock_meshgen.stop(false);

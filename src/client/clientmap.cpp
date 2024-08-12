@@ -138,7 +138,6 @@ void OctreeNode::splitNode()
 
 void Octree::buildTree(std::unordered_map<v2s16, MapSector *> &sectors, v3s16 cam_pos_nodes, MapDrawControl &control)
 {
-	TimeTaker octree_build_time("Building octree", nullptr, PRECISION_MICRO);
 	// Clears all childs formed in the previous tree building
 	clearTree();
 
@@ -205,7 +204,6 @@ void Octree::buildTree(std::unordered_map<v2s16, MapSector *> &sectors, v3s16 ca
 		}
 	}
 
-	octree_build_time.stop(false);
 	//infostream << "buildTree() blocks_loaded = " << blocks_loaded << std::endl;
 	//infostream << "buildTree() blocks_in_octree = " << blocks_in_octree << std::endl;
 	g_profiler->avg("MapBlock meshes in octree [#]", blocks_in_octree);
@@ -296,7 +294,7 @@ ClientMap::~ClientMap()
 
 void ClientMap::updateCamera(v3f pos, v3f dir, f32 fov, v3s16 offset, video::SColor light_color)
 {
-	TimeTaker updatecamera_time("Update camera", nullptr, PRECISION_MICRO);
+	//TimeTaker updatecamera_time("Update camera", nullptr, PRECISION_MICRO);
 	m_camera_direction_change += dir - m_camera_direction;
 
 	v3s16 previous_node = floatToInt(m_camera_position, BS) + m_camera_offset;
@@ -335,7 +333,7 @@ void ClientMap::updateCamera(v3f pos, v3f dir, f32 fov, v3s16 offset, video::SCo
 	if (m_camera_direction_change.getLengthSQ() >= 0.04f) {
 		//infostream << "updateCamera() 4" << std::endl;
 		m_needs_frustum_cull_blocks = true;
-		m_camera_direction_change = v3f(0, 0, 0);
+		m_camera_direction_change = v3f(0.0f);
 		//infostream << "updateCamera() 5" << std::endl;
 	}
 
@@ -346,7 +344,7 @@ void ClientMap::updateCamera(v3f pos, v3f dir, f32 fov, v3s16 offset, video::SCo
 		//infostream << "updateCamera() 7" << std::endl;
 	}
 
-	updatecamera_time.stop(true);
+	//updatecamera_time.stop(true);
 }
 
 MapSector * ClientMap::emergeSector(v2s16 p2d)
@@ -475,11 +473,13 @@ void ClientMap::rebuildOctree()
 	if (!m_needs_rebuild_octree)
 		return;
 
+	TimeTaker octree_build_time("Building octree", nullptr, PRECISION_MICRO);
 	ScopeProfiler sp(g_profiler, "CM::rebuildOctree()", SPT_AVG);
 
 	m_octree.buildTree(m_sectors, floatToInt(m_camera_position, BS), m_control);
 
 	m_needs_rebuild_octree = false;
+	octree_build_time.stop(false);
 }
 
 void ClientMap::frustumCull()
@@ -584,15 +584,18 @@ void ClientMap::updateDrawBuffers()
 			sorted_blocks++;
 		}
 	}
+	infostream << "updateDrawBuffers() m_sorted_mapblocks loop: " << updatebuffers_time.getTimerTime() << "us" << std::endl;
 	//infostream << "updateDrawBuffers() 4" << std::endl;
     m_mesh_storage.prepareTransparentMeshes(sorted_triangles);
+	infostream << "updateDrawBuffers() prepareTransparentMeshes: " << updatebuffers_time.getTimerTime() << "us" << std::endl;
 	//infostream << "updateDrawBuffers() 5" << std::endl;
     m_mesh_storage.prepareSolidMeshes(mesh_parts);
+	infostream << "updateDrawBuffers() prepareSolidMeshes: " << updatebuffers_time.getTimerTime() << "us" << std::endl;
 	//infostream << "updateDrawBuffers() 6" << std::endl;
 
 	m_needs_update_transparent_meshes = false;
 
-	updatebuffers_time.stop(false);
+	updatebuffers_time.stop(true);
 
 	g_profiler->avg("CM::Transparent Buffers - Sorted", sorted_blocks);
 }
@@ -629,8 +632,10 @@ void ClientMap::touchMapBlocks()
 
 void ClientMap::rebuildVBOs(video::IVideoDriver* driver)
 {
+	//TimeTaker rebuild_vbos_time("Rebuilding VBOs", nullptr, PRECISION_MICRO);
 	m_mesh_storage.rebuildSolidVBOs(driver, m_solid_vbos);
 	m_mesh_storage.rebuildTransparentVBOs(driver, m_transparent_vbos);
+	//rebuild_vbos_time.stop(false);
 }
 
 void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)

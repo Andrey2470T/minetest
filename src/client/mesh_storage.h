@@ -20,6 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <vector>
 #include <unordered_map>
 #include <map>
+#include <list>
 #include <mutex>
 #include <shared_mutex>
 #include "client/mesh_collector.h"
@@ -90,7 +91,7 @@ class MeshStorage
 	std::unordered_map<u32, MeshLayer *> m_layers;
 
 	// Baked transparent mesh sets for rebuilding vbos
-	std::vector<std::pair<video::SMaterial, MeshPart>> m_transparent_mesh;
+	std::list<std::pair<video::SMaterial, MeshPart>> m_transparent_mesh;
 
 	// Many mesh generation threads, update clientmap and also main one may access to the layers simultaneously
 	std::shared_mutex m_layers_mutex;

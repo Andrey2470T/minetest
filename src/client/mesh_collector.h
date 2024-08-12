@@ -90,7 +90,7 @@ public:
     virtual void addTileMesh(const TileSpec &tile,
 		const video::S3DVertex *vertices, u32 numVertices,
 		const u16 *indices, u32 numIndices, v3f pos = v3f(0.0f),
-		video::SColor clr = video::SColor(), u8 light_source = 0) = 0;
+		video::SColor clr = video::SColor(), u8 light_source = 0, bool own_color=false) = 0;
 };
 
 class MapblockMeshCollector final : public MeshCollector
@@ -107,7 +107,7 @@ public:
     void addTileMesh(const TileSpec &tile,
 		const video::S3DVertex *vertices, u32 numVertices,
 		const u16 *indices, u32 numIndices, v3f pos = v3f(0.0f),
-		video::SColor clr = video::SColor(), u8 light_source = 0) override;
+		video::SColor clr = video::SColor(), u8 light_source = 0, bool own_color=false) override;
 };
 
 // The code adopted from the deleted client/meshgen
@@ -137,7 +137,7 @@ public:
 	void addTileMesh(const TileSpec &tile,
 		const video::S3DVertex *vertices, u32 numVertices,
 		const u16 *indices, u32 numIndices, v3f pos = v3f(0.0f),
-		video::SColor clr = video::SColor(), u8 light_source = 0) override;
+		video::SColor clr = video::SColor(), u8 light_source = 0, bool own_color=false) override;
 
 private:
 	WieldPreMeshBuffer &findBuffer(const TileLayer &layer, u32 numVertices);

@@ -25,6 +25,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "log.h"
 #include "client/renderingengine.h"
 #include "IMaterialRenderer.h"
+#include "util/timetaker.h"
 
 template<typename T>
 u32 getMinFreeIndex(const std::unordered_map<u32, T> &map)
@@ -53,9 +54,9 @@ void MeshLayer::mergeArrays(u32 layer_index, const MeshPart &mesh, MeshInfo &mes
 
 	arrays_lock.unlock();
 
-	video::IVideoDriver *driver = RenderingEngine::get_video_driver();
+	//video::IVideoDriver *driver = RenderingEngine::get_video_driver();
 	// Split the mesh part into triangles if it is transparent
-	if (driver->getMaterialRenderer(material.MaterialType)->isTransparent()) {
+	/*if (driver->getMaterialRenderer(material.MaterialType)->isTransparent()) {
 		infostream << "mergeArrays() found the transparent material" << std::endl;
 		u32 triangles_count = mesh.indices.size() / 3;
 		for (u32 t = 0; t < triangles_count; t++) {
@@ -68,7 +69,7 @@ void MeshLayer::mergeArrays(u32 layer_index, const MeshPart &mesh, MeshInfo &mes
 
             mesh_info.transparent_triangles.emplace(centre, MeshTriangle(layer_index, arrays_index, {index1, index2, index3}));
 		}
-	}
+	}*/
 }
 
 size_t MeshLayer::removeArrays(u32 arrays_index)
@@ -94,7 +95,9 @@ void MeshLayer::prepareSolidMesh(const std::vector<u32> &arrays)
 	std::vector<MeshPart> solid_mesh;
 	solid_mesh.push_back(MeshPart());
 
+	u32 i = 0;
 	for (auto array : arrays) {
+		TimeTaker array_time("Loop for mesh part array i = " + std::to_string(i), nullptr, PRECISION_MICRO);
 		MutexAutoLock arrays_lock(m_arrays_mutex);
 
 		auto arrays_it = m_arrays.find(array);
@@ -104,6 +107,7 @@ void MeshLayer::prepareSolidMesh(const std::vector<u32> &arrays)
 
 		MeshPart part = arrays_it->second;
 		arrays_lock.unlock();
+		infostream << "MeshLayer::prepareSolidMesh() 1: " << array_time.getTimerTime() << "us" << std::endl;
 
 		MeshPart &last_mesh = solid_mesh.back();
 
@@ -116,18 +120,24 @@ void MeshLayer::prepareSolidMesh(const std::vector<u32> &arrays)
 
 		last_mesh.vertices.insert(last_mesh.vertices.end(), part.vertices.begin(), part.vertices.end());
 
+		infostream << "MeshLayer::prepareSolidMesh() 2: " << array_time.getTimerTime() << "us" << std::endl;
         for (auto &index : part.indices)
 			index += vertex_count;
+		infostream << "MeshLayer::prepareSolidMesh() 3: " << array_time.getTimerTime() << "us" << std::endl;
 
         last_mesh.indices.insert(last_mesh.indices.end(), part.indices.begin(), part.indices.end());
+		array_time.stop(false);
+		++i;
 	}
 
 	MutexAutoLock solid_mesh_lock(m_solid_mesh_mutex);
+	TimeTaker solid_mesh_time("Solid mesh copying", nullptr, PRECISION_MICRO);
 
 	m_solid_mesh = solid_mesh;
 
 	// Flag for rebuilding vbos in the clientmap
 	needs_rebuild_vbos = true;
+	solid_mesh_time.stop(false);
 }
 
 void MeshLayer::rebuildSolidVBOs(video::IVideoDriver *driver, std::vector<scene::IVertexBuffer *> &output)
@@ -334,6 +344,7 @@ size_t MeshStorage::deleteArrays(const MeshRef &mesh)
 
 void MeshStorage::prepareSolidMeshes(const std::vector<MeshRef> &mesh_parts)
 {
+	TimeTaker prepare_solidmeshes_time("Prepare Solid Meshes", nullptr, PRECISION_MICRO);
 	std::unordered_map<u32, std::vector<u32>> collected_layers;
 
 	for (auto mesh_part : mesh_parts)
@@ -345,11 +356,14 @@ void MeshStorage::prepareSolidMeshes(const std::vector<MeshRef> &mesh_parts)
 
 			collected_layers[layer_p.first].push_back(layer_p.second);
 		}
-
+	infostream << "prepareSolidMeshes() mesh_parts loop: " << prepare_solidmeshes_time.getTimerTime() << "us" << std::endl;
 	std::shared_lock layers_sl(m_layers_mutex);
+	infostream << "prepareSolidMeshes() collected_layers count: " << collected_layers.size() << std::endl;
 
 	video::IVideoDriver *driver = RenderingEngine::get_video_driver();
+	u32 i = 0;
 	for (auto &layer_p : collected_layers) {
+		infostream << "prepareSolidMeshes() collected_layers loop layer: " << (i++) << std::endl;
 		auto layer_it = m_layers.find(layer_p.first);
 
 		if (layer_it == m_layers.end())
@@ -360,6 +374,7 @@ void MeshStorage::prepareSolidMeshes(const std::vector<MeshRef> &mesh_parts)
 
 		layer_it->second->prepareSolidMesh(layer_p.second);
 	}
+	infostream << "prepareSolidMeshes() collected_layers loop: " << prepare_solidmeshes_time.getTimerTime() << "us" << std::endl;
 }
 
 void MeshStorage::prepareTransparentMeshes(const std::map<v3f, MeshTriangle, TriangleComparer> &triangles)
@@ -367,7 +382,7 @@ void MeshStorage::prepareTransparentMeshes(const std::map<v3f, MeshTriangle, Tri
 	if (triangles.empty())
 		return;
 
-	std::vector<std::pair<video::SMaterial, MeshPart>> layers;
+	std::list<std::pair<video::SMaterial, MeshPart>> layers;
 
 	std::shared_lock layers_lock(m_layers_mutex);
 

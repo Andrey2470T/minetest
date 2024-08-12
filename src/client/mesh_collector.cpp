@@ -30,7 +30,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 void MapblockMeshCollector::addTileMesh(const TileSpec &tile,
     const video::S3DVertex *vertices, u32 numVertices,
     const u16 *indices, u32 numIndices, v3f pos,
-    video::SColor clr, u8 light_source)
+    video::SColor clr, u8 light_source, bool own_color)
 {
 
     assert(numVertices <= U32_MAX);
@@ -128,18 +128,21 @@ void MapblockMeshCollector::addTileMesh(const TileSpec &tile,
             vertex.TCoords.Y = f32(tile_info.y + rel_y) / atlas_size.Height;
 
             // Alpha equal to 0 = that color isn't passed in the method
-            if (clr.getAlpha() != 0) {
+			//video::SColor &c = vertex.Color;
+			video::SColor c = vertex.Color;
+            if (own_color) {
+				c = clr;
                 if (!light_source)
-                    applyFacesShading(clr, vertex.Normal);
-                vertex.Color = clr;
+                    applyFacesShading(c, vertex.Normal);
             }
             // Multiply the current color with the HW one
             if (tc != video::SColor(0xFFFFFFFF)) {
-                video::SColor &c = vertex.Color;
                 c.setRed(c.getRed() * tc.getRed() / 255);
                 c.setGreen(c.getGreen() * tc.getGreen() / 255);
                 c.setBlue(c.getBlue() * tc.getBlue() / 255);
             }
+
+            vertex.Color = c;
 
             mesh_p.vertices.push_back(vertex);
             info->bounding_radius_sq = std::max(info->bounding_radius_sq,
@@ -154,7 +157,7 @@ void MapblockMeshCollector::addTileMesh(const TileSpec &tile,
 void WieldMeshCollector::addTileMesh(const TileSpec &tile,
 	const video::S3DVertex *vertices, u32 numVertices,
 	const u16 *indices, u32 numIndices, v3f pos,
-	video::SColor clr, u8 light_source)
+	video::SColor clr, u8 light_source, bool own_color)
 {
 	for (int layernum = 0; layernum < MAX_TILE_LAYERS; layernum++) {
 		const TileLayer &layer = tile.layers[layernum];
@@ -171,10 +174,10 @@ void WieldMeshCollector::addTileMesh(const TileSpec &tile,
 		for (u32 i = 0; i < numVertices; i++) {
 			video::SColor color = vertices[i].Color;
 
-			if (clr.getAlpha() != 0) {
-				if (!light_source)
-                    applyFacesShading(clr, vertices[i].Normal);
+			if (own_color) {
 				color = clr;
+				if (!light_source)
+                    applyFacesShading(color, vertices[i].Normal);
 			}
 
 			auto vpos = vertices[i].Pos + pos + offset;
