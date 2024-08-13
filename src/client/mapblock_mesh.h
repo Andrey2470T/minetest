@@ -159,7 +159,7 @@ public:
 	MapBlockMesh(Client *client, MeshMakeData *data, v3s16 camera_offset);
 	~MapBlockMesh();
 
-	MeshRef &getMesh()
+	MapblockMeshCollector *getMesh()
 	{
 		return m_mesh;
 	}
@@ -172,10 +172,10 @@ public:
 	}
 
 	/// Radius of the bounding-sphere, in BS-space.
-	f32 getBoundingRadius() const { return m_bounding_radius; }
+	f32 getBoundingRadius() const { return m_mesh ? m_mesh->info.bounding_radius : 0.0f; }
 
 	/// Center of the bounding-sphere, in BS-space, relative to block pos.
-	v3f getBoundingSphereCenter() const { return m_bounding_sphere_center; }
+	v3f getBoundingSphereCenter() const { return m_mesh ? m_mesh->info.center_pos : v3f(0.0f); }
 
 	/// update transparent buffers to render towards the camera
 	//void updateTransparentBuffers(v3f camera_pos, v3s16 block_pos);
@@ -186,19 +186,19 @@ public:
 	{
 		return this->m_transparent_buffers;
 	}*/
-    std::map<v3f, MeshTriangle, TriangleComparer> m_transparent_triangles;
+    //std::map<v3f, MeshTriangle, TriangleComparer> m_transparent_triangles;
 
 private:
-	MeshRef m_mesh;
+	MapblockMeshCollector *m_mesh = nullptr;
 
-	MeshStorage *m_storage;
+	//MeshStorage *m_storage;
 
 	std::vector<MinimapMapblock*> m_minimap_mapblocks;
 	ITextureSource *m_tsrc;
 	IShaderSource *m_shdrsrc;
 
-	f32 m_bounding_radius;
-	v3f m_bounding_sphere_center;
+	//f32 m_bounding_radius;
+	//v3f m_bounding_sphere_center;
 
 	bool m_enable_shaders;
 

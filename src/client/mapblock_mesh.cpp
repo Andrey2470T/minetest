@@ -558,12 +558,13 @@ void PartialMeshBuffer::afterDraw() const
 */
 
 MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data, v3s16 camera_offset):
-    m_transparent_triangles(TriangleComparer(v3f(0.0f))),
-    m_storage(&client->getEnv().getClientMap().getMeshStorage()),
+    //m_transparent_triangles(TriangleComparer(v3f(0.0f))),
+    //m_storage(&client->getEnv().getClientMap().getMeshStorage()),
 	m_tsrc(client->getTextureSource()),
-	m_shdrsrc(client->getShaderSource()),
-    m_bounding_sphere_center((data->side_length * 0.5f - 0.5f) * BS)
+	m_shdrsrc(client->getShaderSource())
+    //m_bounding_sphere_center((data->side_length * 0.5f - 0.5f) * BS)
 {
+	v3f bounding_sphere_center{(data->side_length * 0.5f - 0.5f) * BS};
 	m_enable_shaders = data->m_use_shaders;
 
 	auto mesh_grid = client->getMeshGrid();
@@ -590,9 +591,8 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data, v3s16 camera_offs
 	v3f offset = intToFloat((data->m_blockpos - mesh_grid.getMeshPos(data->m_blockpos)) * MAP_BLOCKSIZE, BS);
 	v3f translation = intToFloat(mesh_grid.getMeshPos(data->m_blockpos) * MAP_BLOCKSIZE, BS);
 
-    MeshInfo mesh_info(0.0f, m_bounding_sphere_center, offset, translation);
-
-	MapblockMeshCollector collector(client, &mesh_info);
+	MapblockMeshCollector *mesh = new MapblockMeshCollector(client,
+		bounding_sphere_center, offset, translation);
 
 	/*
 		Add special graphics:
@@ -602,17 +602,18 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data, v3s16 camera_offs
 		- whatever
 	*/
 
-	MapblockMeshGenerator(data, &collector,
+	MapblockMeshGenerator(data, mesh,
 		client->getSceneManager()->getMeshManipulator()).generate();
 	//infostream << "MapblockMeshGenerator::generate() took " << mapblock_meshgen.getTimerTime() << "us" << std::endl;
 
-	m_bounding_radius = std::sqrt(mesh_info.bounding_radius_sq);
+	mesh->info.bounding_radius = std::sqrt(mesh->info.bounding_radius_sq);
 
-	m_storage->addArrays(collector);
+	//m_storage->addArrays(collector);
 
 	//infostream << "MapBlockMesh() count of mapblock triangles: " << mesh_info.transparent_triangles.size() << std::endl;
-	m_transparent_triangles = mesh_info.transparent_triangles;
-	m_mesh = mesh_info.layers_to_arrays_map;
+	//m_transparent_triangles = mesh->info.transparent_triangles;
+	m_mesh = mesh;
+	//m_mesh = mesh_info.layers_to_arrays_map;
 	//mapblock_meshgen.stop(false);
 
 	//m_storage.splitIntoTransparentTriangles(m_mesh, &m_transparent_triangles);
@@ -623,7 +624,12 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data, v3s16 camera_offs
 
 MapBlockMesh::~MapBlockMesh()
 {
-	size_t size = m_storage->deleteArrays(m_mesh);
+	//size_t size = m_storage->deleteArrays(m_mesh);
+	size_t size = 0;
+	if (m_mesh) {
+		size = m_mesh->getSize();
+		delete m_mesh;
+	}
 
 	for (MinimapMapblock *block : m_minimap_mapblocks)
 		delete block;

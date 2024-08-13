@@ -94,18 +94,18 @@ void MapblockMeshCollector::addTileMesh(const TileSpec &tile,
         }
 
         // Find already existent prelayer with such material, otherwise create it
-        auto prelayer_it = std::find_if(prelayers.begin(), prelayers.end(),
-            [&material_copy] (const std::pair<video::SMaterial, MeshPart> &prelayer)
+        auto layer_it = std::find_if(layers.begin(), layers.end(),
+            [&material_copy] (const std::pair<video::SMaterial, MeshPart> &layer)
             {
-                return prelayer.first == material_copy;
+                return layer.first == material_copy;
             });
 
-        if (prelayer_it == prelayers.end()) {
-            prelayers.emplace_back(material_copy, MeshPart());
-            prelayer_it = prelayers.end()-1;
+        if (layer_it == layers.end()) {
+            layers.emplace_back(material_copy, MeshPart());
+            layer_it = layers.end()-1;
         }
 
-        MeshPart &mesh_p = prelayer_it->second;
+        MeshPart &mesh_p = layer_it->second;
 
         u32 vertex_count = mesh_p.vertices.size();
         assert(vertex_count + numVertices <= U32_MAX);
@@ -117,7 +117,7 @@ void MapblockMeshCollector::addTileMesh(const TileSpec &tile,
         for (u32 i = 0; i < numVertices; i++) {
             video::S3DVertex vertex(vertices[i]);
 
-            vertex.Pos += pos + info->offset + info->translation;
+            vertex.Pos += pos + info.offset + info.translation;
             vertex.TCoords *= scale;
 
             // Re-calculate UV for linking to the atlas pixels
@@ -127,8 +127,7 @@ void MapblockMeshCollector::addTileMesh(const TileSpec &tile,
             vertex.TCoords.X = f32(tile_info.x + rel_x + tile_pos_shift) / atlas_size.Width;
             vertex.TCoords.Y = f32(tile_info.y + rel_y) / atlas_size.Height;
 
-            // Alpha equal to 0 = that color isn't passed in the method
-			//video::SColor &c = vertex.Color;
+			// Apply face shading
 			video::SColor c = vertex.Color;
             if (own_color) {
 				c = clr;
@@ -145,13 +144,25 @@ void MapblockMeshCollector::addTileMesh(const TileSpec &tile,
             vertex.Color = c;
 
             mesh_p.vertices.push_back(vertex);
-            info->bounding_radius_sq = std::max(info->bounding_radius_sq,
-                    (vertex.Pos - info->center_pos).getLengthSQ());
+            info.bounding_radius_sq = std::max(info.bounding_radius_sq,
+                    (vertex.Pos - info.center_pos).getLengthSQ());
         }
 
         for (u32 i = 0; i < numIndices; i++)
             mesh_p.indices.push_back(vertex_count + indices[i]);
     }
+}
+
+size_t MapblockMeshCollector::getSize() const
+{
+	size_t size = 0;
+
+	for (auto &layer_p : layers) {
+		size += layer_p.second.vertices.size() * sizeof(video::S3DVertex);
+		size += layer_p.second.indices.size() * sizeof(u32);
+	}
+
+	return size;
 }
 
 void WieldMeshCollector::addTileMesh(const TileSpec &tile,

@@ -567,31 +567,66 @@ void ClientMap::updateDrawBuffers()
 
 	u32 sorted_blocks = 0;
 
-    std::vector<MeshRef> mesh_parts;
-    std::map<v3f, MeshTriangle, TriangleComparer> sorted_triangles{TriangleComparer(m_camera_position)};
+	std::list<MeshLayer *> new_layers;
+    //std::vector<MeshRef> mesh_parts;
+    //std::map<v3f, MeshTriangle, TriangleComparer> sorted_triangles{TriangleComparer(m_camera_position)};
 
 	//infostream << "updateDrawBuffers() 3" << std::endl;
-	for (auto &p : m_sorted_mapblocks) {
-		MapBlock *block = p.second;
+	for (auto &block_p : m_sorted_mapblocks) {
+		MapBlock *block = block_p.second;
 		if (!block->mesh)
 			continue;
 
-        mesh_parts.push_back(block->mesh->getMesh());
-		auto &unsorted_triangles = block->mesh->m_transparent_triangles;
+		auto block_mesh = block->mesh->getMesh();
 
-		if (!unsorted_triangles.empty()) {
-            sorted_triangles.insert(unsorted_triangles.begin(), unsorted_triangles.end());
-			sorted_blocks++;
+		for (std::pair<video::SMaterial, MeshPart> block_layer : block_mesh->layers) {
+			auto layer_it = std::find_if(new_layers.begin(), new_layers.end(),
+				[&block_layer] (MeshLayer *layer)
+				{
+					return layer->material == block_layer.first;
+				});
+
+			if (layer_it == new_layers.end()) {
+				new_layers.push_back(new MeshLayer(block_layer.first));
+				layer_it = std::prev(new_layers.end());
+			}
+
+			std::list<MeshPart> &mesh_list = (*layer_it)->merged_mesh;
+			MeshPart &last_part = mesh_list.back();
+			MeshPart &new_part = block_layer.second;
+
+			if (last_part.vertices.size() + new_part.vertices.size() > U32_MAX) {
+				mesh_list.push_back(MeshPart());
+				last_part = mesh_list.back();
+			}
+
+			u32 vertex_count = last_part.vertices.size();
+
+			last_part.vertices.insert(last_part.vertices.end(), new_part.vertices.begin(), new_part.vertices.end());
+
+			for (auto &index : new_part.indices)
+				index += vertex_count;
+
+			last_part.indices.insert(last_part.indices.end(), new_part.indices.begin(), new_part.indices.end());
 		}
+        //mesh_parts.push_back(block->mesh->getMesh());
+		//auto &unsorted_triangles = block->mesh->m_transparent_triangles;
+
+		//if (!unsorted_triangles.empty()) {
+        //    sorted_triangles.insert(unsorted_triangles.begin(), unsorted_triangles.end());
+		//	sorted_blocks++;
+		//}
 	}
-	infostream << "updateDrawBuffers() m_sorted_mapblocks loop: " << updatebuffers_time.getTimerTime() << "us" << std::endl;
+
+	m_mesh_storage.mergeNewLayers(new_layers);
+	/*infostream << "updateDrawBuffers() m_sorted_mapblocks loop: " << updatebuffers_time.getTimerTime() << "us" << std::endl;
 	//infostream << "updateDrawBuffers() 4" << std::endl;
     m_mesh_storage.prepareTransparentMeshes(sorted_triangles);
 	infostream << "updateDrawBuffers() prepareTransparentMeshes: " << updatebuffers_time.getTimerTime() << "us" << std::endl;
 	//infostream << "updateDrawBuffers() 5" << std::endl;
     m_mesh_storage.prepareSolidMeshes(mesh_parts);
 	infostream << "updateDrawBuffers() prepareSolidMeshes: " << updatebuffers_time.getTimerTime() << "us" << std::endl;
-	//infostream << "updateDrawBuffers() 6" << std::endl;
+	//infostream << "updateDrawBuffers() 6" << std::endl;*/
 
 	m_needs_update_transparent_meshes = false;
 
@@ -634,7 +669,7 @@ void ClientMap::rebuildVBOs(video::IVideoDriver* driver)
 {
 	//TimeTaker rebuild_vbos_time("Rebuilding VBOs", nullptr, PRECISION_MICRO);
 	m_mesh_storage.rebuildSolidVBOs(driver, m_solid_vbos);
-	m_mesh_storage.rebuildTransparentVBOs(driver, m_transparent_vbos);
+	//m_mesh_storage.rebuildTransparentVBOs(driver, m_transparent_vbos);
 	//rebuild_vbos_time.stop(false);
 }
 
@@ -669,7 +704,7 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 				drawcall_count++;
 			}
 		}
-	else
+	/*else
 		for (auto &layer_vbo : m_transparent_vbos) {
 			video::SMaterial mat_copy(layer_vbo.first);
 			mat_copy.Wireframe = m_control.show_wireframe;
@@ -679,7 +714,7 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 			driver->drawVertexBuffer(layer_vbo.second);
 
 			drawcall_count++;
-		}
+		}*/
 	/*if (pass == scene::ESNRP_SOLID)
 		for (auto &p : m_sorted_mapblocks) {
 			if (!p.second->mesh)

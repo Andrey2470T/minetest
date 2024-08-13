@@ -27,7 +27,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "IMaterialRenderer.h"
 #include "util/timetaker.h"
 
-template<typename T>
+/*template<typename T>
 u32 getMinFreeIndex(const std::unordered_map<u32, T> &map)
 {
 	u32 free_index = 0;
@@ -40,9 +40,9 @@ u32 getMinFreeIndex(const std::unordered_map<u32, T> &map)
 	}
 
 	return free_index;
-}
+}*/
 
-void MeshLayer::mergeArrays(u32 layer_index, const MeshPart &mesh, MeshInfo &mesh_info)
+/*void MeshLayer::mergeArrays(u32 layer_index, const MeshPart &mesh, MeshInfo &mesh_info)
 {
 	MutexAutoLock arrays_lock(m_arrays_mutex);
 
@@ -56,7 +56,7 @@ void MeshLayer::mergeArrays(u32 layer_index, const MeshPart &mesh, MeshInfo &mes
 
 	//video::IVideoDriver *driver = RenderingEngine::get_video_driver();
 	// Split the mesh part into triangles if it is transparent
-	/*if (driver->getMaterialRenderer(material.MaterialType)->isTransparent()) {
+	if (driver->getMaterialRenderer(material.MaterialType)->isTransparent()) {
 		infostream << "mergeArrays() found the transparent material" << std::endl;
 		u32 triangles_count = mesh.indices.size() / 3;
 		for (u32 t = 0; t < triangles_count; t++) {
@@ -69,10 +69,10 @@ void MeshLayer::mergeArrays(u32 layer_index, const MeshPart &mesh, MeshInfo &mes
 
             mesh_info.transparent_triangles.emplace(centre, MeshTriangle(layer_index, arrays_index, {index1, index2, index3}));
 		}
-	}*/
-}
+	}
+}*/
 
-size_t MeshLayer::removeArrays(u32 arrays_index)
+/*size_t MeshLayer::removeArrays(u32 arrays_index)
 {
 	size_t size = 0;
 
@@ -88,9 +88,9 @@ size_t MeshLayer::removeArrays(u32 arrays_index)
 	}
 
 	return size;
-}
+}*/
 
-void MeshLayer::prepareSolidMesh(const std::vector<u32> &arrays)
+/*void MeshLayer::prepareSolidMesh(const std::vector<u32> &arrays)
 {
 	std::vector<MeshPart> solid_mesh;
 	solid_mesh.push_back(MeshPart());
@@ -138,9 +138,9 @@ void MeshLayer::prepareSolidMesh(const std::vector<u32> &arrays)
 	// Flag for rebuilding vbos in the clientmap
 	needs_rebuild_vbos = true;
 	solid_mesh_time.stop(false);
-}
+}*/
 
-void MeshLayer::rebuildSolidVBOs(video::IVideoDriver *driver, std::vector<scene::IVertexBuffer *> &output)
+/*void MeshLayer::rebuildSolidVBOs(video::IVideoDriver *driver, std::vector<scene::IVertexBuffer *> &output)
 {
 	if (!needs_rebuild_vbos)
 		return;
@@ -158,74 +158,9 @@ void MeshLayer::rebuildSolidVBOs(video::IVideoDriver *driver, std::vector<scene:
 
 		output.push_back(buffer);
 	}
-}
-/*void MeshLayer::clearVBOs()
-{
-    MutexAutoLock vbos_lock(m_vbos_mutex);
-
-    for (scene::IVertexBuffer *buffer : m_solid_buffers)
-        if (buffer) {
-            delete buffer;
-            buffer = nullptr;
-        }
-}
-
-void MeshLayer::addVertexArrayInVBOs(video::IVideoDriver *driver, u32 arrays_index)
-{
-    if (!needs_rebuild_vbos)
-        return;
-
-    MutexAutoLock arrays_lock(m_arrays_mutex);
-    auto arrays_it = m_arrays.find(arrays_index);
-
-    if (arrays_it == m_arrays.end())
-        return;
-
-	MeshPart part = arrays_it->second;
-
-    arrays_lock.unlock();
-
-    MutexAutoLock vbos_lock(m_vbos_mutex);
-
-    if (!m_cur_buffer) {
-        m_cur_buffer = driver->createVertexBuffer();
-        m_cur_buffer->formatBuffer();
-        m_solid_buffers.push_back(m_cur_buffer);
-    }
-
-    if (m_cur_vertices.size() + part.vertices.size() > U32_MAX) {
-        m_cur_buffer->uploadVertexData(m_cur_vertices.size(), m_cur_vertices.data());
-        m_cur_buffer->uploadIndexData(m_cur_indices.size(), m_cur_indices.data());
-
-        m_cur_vertices.clear();
-        m_cur_indices.clear();
-
-        m_cur_buffer = driver->createVertexBuffer();
-        m_cur_buffer->formatBuffer();
-        m_solid_buffers.push_back(m_cur_buffer);
-    }
-
-    vbos_lock.unlock();
-
-    u32 vertex_count = m_cur_vertices.size();
-
-    m_cur_vertices.insert(m_cur_vertices.end(), part.vertices.begin(), part.vertices.end());
-
-    for (auto &ind : part.indices)
-        ind += vertex_count;
-
-    m_cur_indices.insert(m_cur_indices.end(), part.indices.begin(), part.indices.end());
-}
-
-void MeshLayer::clearTempData()
-{
-    m_cur_buffer = nullptr;
-
-    m_cur_vertices.clear();
-    m_cur_indices.clear();
 }*/
 
-void MeshLayer::fetchVertexTriple(u32 arrays_index, const std::array<u32, 3> &indices, std::array<video::S3DVertex, 3> &vertices)
+/*void MeshLayer::fetchVertexTriple(u32 arrays_index, const std::array<u32, 3> &indices, std::array<video::S3DVertex, 3> &vertices)
 {
     MutexAutoLock arrays_lock(m_arrays_mutex);
 
@@ -237,9 +172,9 @@ void MeshLayer::fetchVertexTriple(u32 arrays_index, const std::array<u32, 3> &in
 	vertices[0] = arrays_it->second.vertices.at(indices[0]);
 	vertices[1] = arrays_it->second.vertices.at(indices[1]);
 	vertices[2] = arrays_it->second.vertices.at(indices[2]);
-}
+}*/
 
-void MeshLayer::updateLighting(video::SColorf &day_color)
+/*void MeshLayer::updateLighting(video::SColorf &day_color)
 {
 	MutexAutoLock solid_mesh_lock(m_solid_mesh_mutex);
 
@@ -253,7 +188,7 @@ void MeshLayer::updateLighting(video::SColorf &day_color)
 	}
 
 	needs_rebuild_vbos = true;
-}
+}*/
 
 /*void MeshLayer::render(video::IVideoDriver *driver,
 	bool wireframe, u32 &drawcall_count)
@@ -279,7 +214,7 @@ MeshStorage::MeshStorage(Client *client)
 	: m_client(client)
 {}
 
-void MeshStorage::addArrays(const MapblockMeshCollector &collector)
+/*void MeshStorage::addArrays(const MapblockMeshCollector &collector)
 {
 	MeshInfo &info = *collector.info;
 
@@ -340,9 +275,9 @@ size_t MeshStorage::deleteArrays(const MeshRef &mesh)
 	}
 
 	return size;
-}
+}*/
 
-void MeshStorage::prepareSolidMeshes(const std::vector<MeshRef> &mesh_parts)
+/*void MeshStorage::prepareSolidMeshes(const std::vector<MeshRef> &mesh_parts)
 {
 	TimeTaker prepare_solidmeshes_time("Prepare Solid Meshes", nullptr, PRECISION_MICRO);
 	std::unordered_map<u32, std::vector<u32>> collected_layers;
@@ -423,18 +358,42 @@ void MeshStorage::prepareTransparentMeshes(const std::map<v3f, MeshTriangle, Tri
 	m_transparent_mesh = layers;
 
 	needs_rebuild_tvbos = true;
+}*/
+
+void MeshStorage::mergeNewLayers(const std::list<MeshLayer *> &new_layers)
+{
+	MutexAutoLock layers_lock(m_layers_mutex);
+
+	// Remove old layers
+	for (auto layer : m_layers)
+		delete layer;
+
+	m_layers.clear();
+
+	// Add new ones
+	for (auto new_layer : new_layers)
+		m_layers.push_back(new_layer);
+
+	layers_updated = true;
 }
 
 void MeshStorage::updateLighting(video::SColorf &day_color)
 {
-	std::shared_lock layers_lock(m_layers_mutex);
+	MutexAutoLock layers_lock(m_layers_mutex);
 
 	// Update for solid meshes
-	for (auto &layer : m_layers)
-		layer.second->updateLighting(day_color);
-	layers_lock.unlock();
+	for (auto layer : m_layers)
+		for (auto &mesh_part : layer->merged_mesh) {
+			auto &vertices = mesh_part.vertices;
 
-	MutexAutoLock tmesh_lock(m_tmesh_mutex);
+			for (u32 i = 0; i < vertices.size(); i++)
+				if (vertices[i].Color.getAlpha() != 0)
+					final_color_blend(&(vertices[i].Color), vertices[i].Color,
+						day_color);
+		}
+
+	layers_updated = true;
+	/*MutexAutoLock tmesh_lock(m_tmesh_mutex);
 	// Update for transparent meshes
 	for (auto &tlayer : m_transparent_mesh) {
 		auto &vertices = tlayer.second.vertices;
@@ -445,10 +404,43 @@ void MeshStorage::updateLighting(video::SColorf &day_color)
 					day_color);
 	}
 
-	needs_rebuild_tvbos = true;
+	needs_rebuild_tvbos = true;*/
 }
 
 void MeshStorage::rebuildSolidVBOs(video::IVideoDriver *driver,
+	std::list<std::pair<video::SMaterial, std::list<scene::IVertexBuffer *>>> &vbos)
+{
+	if (!layers_updated)
+		return;
+
+	layers_updated = false;
+
+	// Remove old vbos
+	for (auto &old_layer_vbos : vbos)
+		for (auto old_vbo : old_layer_vbos.second)
+			if (old_vbo)
+				delete old_vbo;
+
+	vbos.clear();
+
+	// Add new vbos
+	MutexAutoLock layers_lock(m_layers_mutex);
+
+	for (auto new_layer : m_layers) {
+		std::list<scene::IVertexBuffer *> new_vbos;
+		for (auto &mesh_part : new_layer->merged_mesh) {
+			scene::IVertexBuffer *new_vbo = driver->createVertexBuffer();
+			new_vbo->formatBuffer();
+			new_vbo->uploadVertexData(mesh_part.vertices.size(), mesh_part.vertices.data());
+			new_vbo->uploadIndexData(mesh_part.indices.size(), mesh_part.indices.data());
+
+			new_vbos.push_back(new_vbo);
+		}
+
+		vbos.emplace_back(new_layer->material, new_vbos);
+	}
+}
+/*void MeshStorage::rebuildSolidVBOs(video::IVideoDriver *driver,
 	std::vector<std::pair<video::SMaterial, std::vector<scene::IVertexBuffer *>>> &vbos)
 {
 	std::shared_lock layers_sl(m_layers_mutex);
@@ -505,31 +497,5 @@ void MeshStorage::rebuildTransparentVBOs(video::IVideoDriver *driver,
 		buffer->uploadIndexData(part.indices.size(), part.indices.data());
 
 		vbos.emplace_back(tmesh_p.first, buffer);
-	}
-}
-
-/*void MeshStorage::renderSolidVBOs(video::IVideoDriver *driver,
-	bool wireframe, u32 &drawcall_count)
-{
-	std::shared_lock layers_sl(m_layers_mutex);
-
-    for (auto &layer_p : m_layers)
-		layer_p.second->render(driver, wireframe, drawcall_count);
-}
-
-void MeshStorage::renderTransparentVBOs(video::IVideoDriver *driver,
-	bool wireframe, u32 &drawcall_count)
-{
-	MutexAutoLock tbuffers_lock(m_tbuffers_mutex);
-
-	for (auto &tbuffer_p : m_transparent_buffers) {
-		video::SMaterial mat_copy(tbuffer_p.first);
-		mat_copy.Wireframe = wireframe;
-
-		driver->setMaterial(mat_copy);
-
-		driver->drawVertexBuffer(tbuffer_p.second);
-
-		drawcall_count++;
 	}
 }*/

@@ -63,24 +63,23 @@ struct MeshInfo
 {
 	// bounding sphere radius and center
 	f32 bounding_radius_sq = 0.0f;
+	f32 bounding_radius = 0.0f;
 	v3f center_pos;
 	v3f offset;
 	v3f translation;
 
     std::map<v3f, MeshTriangle, TriangleComparer> transparent_triangles;
 	// Map specific layers to specific vertex arrays which the given mesh has
-	MeshRef layers_to_arrays_map;
+	//MeshRef layers_to_arrays_map;
 
-    MeshInfo(f32 _bounding_radius_sq, v3f _center_pos, v3f _offset, v3f _translation)
-        : bounding_radius_sq(_bounding_radius_sq), center_pos(_center_pos), offset(_offset),
-          translation(_translation), transparent_triangles{TriangleComparer(v3f(0.0f))}
-    {}
+    MeshInfo(v3f _center_pos, v3f _offset, v3f _translation)
+        : center_pos(_center_pos), offset(_offset), translation(_translation),
+        transparent_triangles{TriangleComparer(v3f(0.0f))} {}
 };
 
 struct MeshPart
 {
 	std::vector<video::S3DVertex> vertices;
-
 	std::vector<u32> indices;
 };
 
@@ -95,19 +94,22 @@ public:
 
 class MapblockMeshCollector final : public MeshCollector
 {
-public:
 	Client *client;
-	MeshInfo *info;
 
-	std::vector<std::pair<video::SMaterial, MeshPart>> prelayers;
+public:
+	MeshInfo info;
+	std::vector<std::pair<video::SMaterial, MeshPart>> layers;
 
-    MapblockMeshCollector(Client *_client, MeshInfo *_mesh_info)
-		: client(_client), info(_mesh_info) {}
+    MapblockMeshCollector(Client *_client, v3f _center_pos,
+			v3f _offset, v3f _translation)
+		: client(_client), info(_center_pos, _offset, _translation) {}
 
     void addTileMesh(const TileSpec &tile,
 		const video::S3DVertex *vertices, u32 numVertices,
 		const u16 *indices, u32 numIndices, v3f pos = v3f(0.0f),
 		video::SColor clr = video::SColor(), u8 light_source = 0, bool own_color=false) override;
+
+	size_t getSize() const;
 };
 
 // The code adopted from the deleted client/meshgen

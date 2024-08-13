@@ -306,7 +306,7 @@ private:
 
 	MeshStorage m_mesh_storage;
 
-	std::vector<std::pair<video::SMaterial, std::vector<scene::IVertexBuffer *>>> m_solid_vbos;
+	std::list<std::pair<video::SMaterial, std::list<scene::IVertexBuffer *>>> m_solid_vbos;
 	std::vector<std::pair<video::SMaterial, scene::IVertexBuffer *>> m_transparent_vbos;
 
 
