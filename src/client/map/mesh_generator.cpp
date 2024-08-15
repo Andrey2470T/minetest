@@ -18,19 +18,19 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include <cmath>
-#include "content_mapblock.h"
+#include "mesh_generator.h"
 #include "util/numeric.h"
 #include "util/directiontables.h"
 #include "mapblock_mesh.h"
 #include "settings.h"
 #include "nodedef.h"
 #include "client/tile.h"
-#include "mesh.h"
+#include "client/mesh.h"
 #include <IMeshManipulator.h>
 #include "client/renderingengine.h"
-#include "client.h"
+#include "client/client.h"
 #include "noise.h"
-#include "light_colors.h"
+#include "client/light_colors.h"
 
 // Distance of light extrapolation (for oversized nodes)
 // After this distance, it gives up and considers light level constant

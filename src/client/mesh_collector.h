@@ -26,7 +26,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 class Client;
 
 // Map of indices to layers and indices of arrays pairs inside that layer
-using MeshRef = std::unordered_map<u32, u32>;
+//using MeshRef = std::unordered_map<u32, u32>;
 
 class TriangleComparer
 {

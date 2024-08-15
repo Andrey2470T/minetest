@@ -32,7 +32,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "content_nodemeta.h" // For legacy deserialization
 #include "serialization.h"
 #ifndef SERVER
-#include "client/mapblock_mesh.h"
+#include "client/map/mapblock_mesh.h"
 #endif
 #include "porting.h"
 #include "util/string.h"

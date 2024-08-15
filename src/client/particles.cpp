@@ -29,7 +29,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "light.h"
 #include "localplayer.h"
 #include "environment.h"
-#include "clientmap.h"
+#include "map/clientmap.h"
 #include "mapnode.h"
 #include "nodedef.h"
 #include "client.h"

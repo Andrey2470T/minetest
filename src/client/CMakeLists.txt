@@ -25,6 +25,12 @@ endif()
 
 set(client_SRCS
 	${sound_SRCS}
+	${CMAKE_CURRENT_SOURCE_DIR}/map/clientmap.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/map/mapblock_mesh.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/map/mesh_generator_thread.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/map/mesh_generator.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/map/mesh_storage.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/map/octree.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/render/anaglyph.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/render/core.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/render/factory.cpp
@@ -39,13 +45,11 @@ set(client_SRCS
 	${CMAKE_CURRENT_SOURCE_DIR}/client.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/clientenvironment.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/clientlauncher.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/clientmap.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/clientmedia.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/clientobject.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/clouds.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/content_cao.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/content_cso.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/content_mapblock.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/filecache.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/fontengine.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/game.cpp
@@ -58,11 +62,8 @@ set(client_SRCS
 	${CMAKE_CURRENT_SOURCE_DIR}/keycode.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/light_colors.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/localplayer.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/mapblock_mesh.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/mesh.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/mesh_collector.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/mesh_generator_thread.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/mesh_storage.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/minimap.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/particles.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/renderingengine.cpp

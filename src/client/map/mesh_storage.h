@@ -22,10 +22,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <map>
 #include <list>
 #include <mutex>
-#include <shared_mutex>
 #include "client/mesh_collector.h"
 #include "util/basic_macros.h"
-#include "IVertexBuffer.h"
+#include <IVertexBuffer.h>
 #include <atomic>
 
 class Client;
@@ -46,23 +45,6 @@ struct MeshLayer
 	{
 		merged_mesh.push_back(MeshPart());
 	}
-
-	// Add vertex and index arrays from some mesh part in this layer
-    //void mergeArrays(u32 layer_index, const MeshPart &mesh, MeshInfo &mesh_info);
-   // size_t removeArrays(u32 arrays_index);
-
-	//bool isEmpty() { return m_arrays.empty(); }
-
-	//void prepareSolidMesh(const std::vector<u32> &arrays);
-
-    //void rebuildSolidVBOs(video::IVideoDriver *driver, std::vector<scene::IVertexBuffer *> &output);
-
-	//void fetchVertexTriple(u32 arrays_index, const std::array<u32, 3> &indices,
-     //   std::array<video::S3DVertex, 3> &vertices);
-
-	//void updateLighting(video::SColorf &day_color);
-
-    //void render(video::IVideoDriver *driver, bool wireframe, u32 &drawcall_count);
 };
 
 // Abstraction saving all layers of the scene (mapblocks or wieldmesh)
@@ -88,15 +70,6 @@ public:
 
 	DISABLE_CLASS_COPY(MeshStorage) // copying of the layers is prohibited
 
-	// Add a bunch of new arrays from the collector
-    //void addArrays(const MapblockMeshCollector &collector);
-
-	// Delete all buffers and if necessary materials which the mesh part owns from the storage
-	//size_t deleteArrays(const MeshRef &mesh);
-
-	//void prepareSolidMeshes(const std::vector<MeshRef> &mesh_parts);
-	//void prepareTransparentMeshes(const std::map<v3f, MeshTriangle, TriangleComparer> &triangles);
-
 	void mergeNewLayers(const std::list<MeshLayer *> &new_layers);
 
     void rebuildSolidVBOs(video::IVideoDriver *driver,
@@ -105,9 +78,4 @@ public:
 	//	std::vector<std::pair<video::SMaterial, scene::IVertexBuffer *>> &vbos);
 
 	void updateLighting(video::SColorf &day_color);
-
-   // void renderSolidVBOs(video::IVideoDriver *driver,
-	//	bool wireframe, u32 &drawcall_count);
-	//void renderTransparentVBOs(video::IVideoDriver *driver,
-	//	bool wireframe, u32 &drawcall_count);
 };

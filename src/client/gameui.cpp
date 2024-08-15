@@ -25,7 +25,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "gui/guiChatConsole.h"
 #include "util/pointedthing.h"
 #include "client.h"
-#include "clientmap.h"
+#include "map/clientmap.h"
 #include "fontengine.h"
 #include "nodedef.h"
 #include "profiler.h"

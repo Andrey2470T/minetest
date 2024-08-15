@@ -22,7 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "secondstage.h"
 #include "client/camera.h"
 #include "client/client.h"
-#include "client/clientmap.h"
+#include "client/map/clientmap.h"
 #include "client/hud.h"
 #include "client/minimap.h"
 #include "client/shadows/dynamicshadowsrender.h"

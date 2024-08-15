@@ -121,7 +121,7 @@ void TextureAtlas::packTextures(int side)
 		});
 	std::vector<TileInfo> areas;
 
-	areas.push_back(TileInfo(0, 0, side, side));
+	areas.emplace_back(0, 0, side, side);
 
 	u32 counter = 0;
 	for (auto &info : sorted_infos) {
@@ -141,10 +141,10 @@ void TextureAtlas::packTextures(int side)
 				areas.erase(areas.begin()+i);
 
 				if (dw > 0)
-					areas.push_back(TileInfo(area.x + info->width, area.y, dw, info->height));
+					areas.emplace_back(area.x + info->width, area.y, dw, info->height);
 
 				if (dh > 0)
-					areas.push_back(TileInfo(area.x, area.y + info->height, area.width, dh));
+					areas.emplace_back(area.x, area.y + info->height, area.width, dh);
 
 				std::sort(areas.begin(), areas.end(),
 					[] (TileInfo area1, TileInfo area2)

@@ -24,8 +24,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "gamedef.h"
 #include "dummygamedef.h"
-#include "client/content_mapblock.h"
-#include "client/mapblock_mesh.h"
+#include "client/map/mesh_generator.h"
+#include "client/map/mapblock_mesh.h"
 #include "client/mesh_collector.h"
 #include "mesh_compare.h"
 #include "util/directiontables.h"

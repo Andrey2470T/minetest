@@ -21,19 +21,18 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "irrlichttypes_extrabloated.h"
 #include "map.h"
-#include "camera.h"
+#include "client/camera.h"
 #include <map>
 #include "profiler.h"
 #include "mapsector.h"
-#include "mapblock.h"
 #include "mapblock_mesh.h"
-#include <functional>
 #include <atomic>
 #include "threading/thread.h"
 #include <chrono>
 #include "porting.h"
 #include "log.h"
-#include "IVertexBuffer.h"
+#include <IVertexBuffer.h>
+#include "octree.h"
 
 class MeshStorage;
 class Client;
@@ -49,95 +48,6 @@ struct MapDrawControl
 	bool allow_noclip = false;
 	// show a wire frame for debugging
 	bool show_wireframe = false;
-};
-
-// Octree for accelerated frustum culling
-class OctreeNode
-{
-public:
-	OctreeNode(std::vector<MapBlock *> mapblocks, core::aabbox3d<s16> box)
-		: m_mapblocks(mapblocks), m_bounding_box(box)
-	{
-		for (u32 i = 0; i < 8; i++)
-			m_child_nodes[i] = nullptr;
-	}
-
-	~OctreeNode()
-	{
-		// If this is not a leaf node, recursively delete its childs
-		for (auto node : m_child_nodes)
-			if (node)
-				delete node;
-	}
-
-	void splitNode();
-
-	// Calls some callback for this node and in case true continue traversing through its children
-	void traverseNode(std::function<bool(const OctreeNode *)> func)
-	{
-		bool result = func(this);
-
-		if (result)
-			for (auto &next_node : m_child_nodes)
-				if (next_node)
-					next_node->traverseNode(func);
-	}
-
-	const std::vector<MapBlock *> &getMapBlocks() const
-	{
-		return m_mapblocks;
-	}
-
-	core::aabbox3d<s16> getBox() const
-	{
-		return m_bounding_box;
-	}
-
-	u32 getFullCountOfMapBlocks() const
-	{
-		u32 mapblocks_count = 0;
-
-		mapblocks_count += m_mapblocks.size();
-
-		for (auto &node : m_child_nodes)
-			if (node)
-				mapblocks_count += node->getFullCountOfMapBlocks();
-
-		return mapblocks_count;
-	}
-private:
-	std::array<OctreeNode *, 8> m_child_nodes;
-
-	std::vector<MapBlock *> m_mapblocks;
-
-	core::aabbox3d<s16> m_bounding_box; // in nodes
-};
-
-class Octree
-{
-public:
-	Octree() = default;
-
-	void buildTree(std::unordered_map<v2s16, MapSector *> &sectors, v3s16 cam_pos_nodes, MapDrawControl &control);
-
-	void traverseTree(std::function<bool(const OctreeNode *)> func)
-	{
-		if (!m_root_node)
-			return;
-
-		m_root_node->traverseNode(func);
-	}
-
-	bool isBuilt() { return m_root_node != nullptr; }
-
-	void clearTree()
-	{
-		if (m_root_node)
-			delete m_root_node;
-	}
-
-private:
-	OctreeNode *m_root_node = nullptr;
 };
 
 class UpdateClientMapThread;
@@ -192,8 +102,6 @@ public:
 	}
 
 	void rebuildOctree();
-	//void getBlocksInViewRange(v3s16 cam_pos_nodes,
-	//	v3s16 *p_blocks_min, v3s16 *p_blocks_max, float range=-1.0f);
 	void frustumCull();
 	// @brief Calculate statistics about the map and keep the blocks alive
 	void updateDrawBuffers();
@@ -201,10 +109,8 @@ public:
 	void touchMapBlocks();
 	void rebuildVBOs(video::IVideoDriver* driver);
 	void updateDrawListShadow(v3f shadow_light_pos, v3f shadow_light_dir, float radius, float length);
-	// Returns true if draw list needs updating before drawing the next frame.
-	//bool needsUpdateDrawList() { return m_needs_update_drawlist; }
-	void renderMap(video::IVideoDriver* driver, s32 pass);
 
+	void renderMap(video::IVideoDriver* driver, s32 pass);
 	void renderMapShadows(video::IVideoDriver *driver,
 			const video::SMaterial &material, s32 pass, int frame, int total_frames);
 

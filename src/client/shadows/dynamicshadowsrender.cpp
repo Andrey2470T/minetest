@@ -27,7 +27,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "util/string.h"
 #include "client/shader.h"
 #include "client/client.h"
-#include "client/clientmap.h"
+#include "client/map/clientmap.h"
 #include "profiler.h"
 #include "EShaderTypes.h"
 #include "IGPUProgrammingServices.h"
@@ -140,7 +140,7 @@ void ShadowRenderer::initialize()
 	}
 
 	createShaders();
-	
+
 
 	m_texture_format = m_shadow_map_texture_32bit
 					   ? video::ECOLOR_FORMAT::ECF_R32F

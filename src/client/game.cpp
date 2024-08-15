@@ -30,9 +30,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/texturepaths.h"
 #include "client/keys.h"
 #include "client/joystick_controller.h"
-#include "client/mapblock_mesh.h"
+#include "map/mapblock_mesh.h"
 #include "client/sound.h"
-#include "clientmap.h"
+#include "map/clientmap.h"
 #include "clientmedia.h" // For clientMediaUpdateCacheCopy
 #include "clouds.h"
 #include "config.h"

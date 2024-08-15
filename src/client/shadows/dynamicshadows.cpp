@@ -22,7 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/shadows/dynamicshadows.h"
 #include "client/client.h"
 #include "client/clientenvironment.h"
-#include "client/clientmap.h"
+#include "client/map/clientmap.h"
 #include "client/camera.h"
 
 using m4f = core::matrix4;

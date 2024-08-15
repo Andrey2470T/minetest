@@ -21,7 +21,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "util/base64.h"
 #include "client/camera.h"
-#include "client/mesh_generator_thread.h"
+#include "client/map/mesh_generator_thread.h"
 #include "chatmessage.h"
 #include "client/clientmedia.h"
 #include "log.h"

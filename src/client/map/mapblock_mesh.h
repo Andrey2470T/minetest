@@ -22,7 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "irrlichttypes_extrabloated.h"
 #include "util/numeric.h"
 #include "client/tile.h"
-#include "client/mesh_storage.h"
+#include "mesh_storage.h"
 #include "voxel.h"
 #include <array>
 #include <map>

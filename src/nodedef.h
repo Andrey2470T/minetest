@@ -27,6 +27,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "nameidmapping.h"
 #ifndef SERVER
 #include "client/tile.h"
+#include "client/texture_atlas.h"
 #include <IMeshManipulator.h>
 class Client;
 #endif
@@ -36,9 +37,6 @@ class Client;
 #include "texture_override.h" // TextureOverride
 #include "tileanimation.h"
 #include "util/pointabilities.h"
-#ifndef SERVER
-#include "client/texture_atlas.h"
-#endif
 
 class IItemDefManager;
 class ITextureSource;
@@ -758,6 +756,7 @@ public:
 	 */
 	void resolveCrossrefs();
 
+#ifndef SERVER
 	/*!
 	 * Gets access to the atlas
 	 */
@@ -765,6 +764,7 @@ public:
 	{
 		return m_diffuse_atlas;
 	}
+#endif
 
 private:
 	/*!

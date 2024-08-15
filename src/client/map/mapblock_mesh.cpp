@@ -18,23 +18,23 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "mapblock_mesh.h"
-#include "client.h"
+#include "client/client.h"
 #include "mapblock.h"
 #include "map.h"
 #include "noise.h"
 #include "profiler.h"
-#include "shader.h"
-#include "mesh.h"
-#include "minimap.h"
-#include "content_mapblock.h"
+#include "client/shader.h"
+#include "client/mesh.h"
+#include "client/minimap.h"
+#include "mesh_generator.h"
 #include "util/directiontables.h"
 #include "client/renderingengine.h"
 #include <array>
 #include <algorithm>
 #include <cmath>
 #include "client/texturesource.h"
-#include "client/clientmap.h"
-#include "client/mesh_storage.h"
+#include "clientmap.h"
+#include "mesh_storage.h"
 #include "client/light_colors.h"
 #include "log.h"
 #include "util/timetaker.h"

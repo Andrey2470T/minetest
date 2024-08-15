@@ -29,7 +29,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/hud.h"
 #include "camera.h"
 #include "minimap.h"
-#include "clientmap.h"
+#include "map/clientmap.h"
 #include "renderingengine.h"
 #include "render/core.h"
 #include "render/factory.h"

@@ -18,205 +18,18 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "clientmap.h"
-#include "client.h"
+#include "client/client.h"
 #include "client/mesh.h"
 #include <IMaterialRenderer.h>
 #include <matrix4.h>
 #include "nodedef.h"
 #include "settings.h"
-#include "camera.h"               // CameraModes
 #include "util/basic_macros.h"
 #include "client/renderingengine.h"
 #include "client/light_colors.h"
 #include "log.h"
 
 #include <queue>
-
-/*namespace {
-	// A helper struct
-	struct MeshBufListMaps
-	{
-		struct MaterialHash
-		{
-			size_t operator()(const video::SMaterial &m) const noexcept
-			{
-				// Only hash first texture. Simple and fast.
-				return std::hash<video::ITexture *>{}(m.TextureLayers[0].Texture);
-			}
-		};
-
-		using MeshBufListMap = std::unordered_map<
-				video::SMaterial,
-				std::vector<std::pair<v3s16, scene::IMeshBuffer *>>,
-				MaterialHash>;
-
-		std::array<MeshBufListMap, MAX_TILE_LAYERS> maps;
-
-		void clear()
-		{
-			for (auto &map : maps)
-				map.clear();
-		}
-
-		void add(scene::IMeshBuffer *buf, v3s16 position, u8 layer)
-		{
-			assert(layer < MAX_TILE_LAYERS);
-
-			// Append to the correct layer
-			auto &map = maps[layer];
-			const video::SMaterial &m = buf->getMaterial();
-			auto &bufs = map[m]; // default constructs if non-existent
-			bufs.emplace_back(position, buf);
-		}
-	};
-}*/
-
-void OctreeNode::splitNode()
-{
-	//infostream << "splitNode() mapblocks count: " << m_mapblocks.size() << std::endl;
-	if (m_mapblocks.size() <= 1)
-		return;
-
-	v3s16 dims = m_bounding_box.MaxEdge - m_bounding_box.MinEdge + v3s16(1, 1, 1);
-
-	if (dims.X <= MAP_BLOCKSIZE || dims.Y <= MAP_BLOCKSIZE || dims.Z <= MAP_BLOCKSIZE)
-		return;
-
-	v3s16 centre = m_bounding_box.MinEdge + dims / 2;
-
-	std::array<core::aabbox3d<s16>, 8> oct_boxes;
-
-	oct_boxes[0] = core::aabbox3d<s16>(m_bounding_box.MinEdge, centre - v3s16(1, 1, 1));
-	oct_boxes[1] = core::aabbox3d<s16>(
-		v3s16(oct_boxes[0].MinEdge.X, oct_boxes[0].MinEdge.Y, centre.Z),
-		v3s16(oct_boxes[0].MaxEdge.X, oct_boxes[0].MaxEdge.Y, m_bounding_box.MaxEdge.Z)
-	);
-	oct_boxes[2] = core::aabbox3d<s16>(
-		v3s16(centre.X, oct_boxes[1].MinEdge.Y, oct_boxes[1].MinEdge.Z),
-		v3s16(m_bounding_box.MaxEdge.X, oct_boxes[1].MaxEdge.Y, oct_boxes[1].MaxEdge.Z)
-	);
-	oct_boxes[3] = core::aabbox3d<s16>(
-		v3s16(centre.X, oct_boxes[0].MinEdge.Y, oct_boxes[0].MinEdge.Z),
-		v3s16(m_bounding_box.MaxEdge.X, oct_boxes[0].MaxEdge.Y, oct_boxes[0].MaxEdge.Z)
-	);
-	oct_boxes[4] = core::aabbox3d<s16>(
-		v3s16(oct_boxes[0].MinEdge.X, centre.Y, oct_boxes[0].MinEdge.Z),
-		v3s16(oct_boxes[0].MaxEdge.X, m_bounding_box.MaxEdge.Y, oct_boxes[0].MaxEdge.Z)
-	);
-	oct_boxes[5] = core::aabbox3d<s16>(
-		v3s16(oct_boxes[4].MinEdge.X, oct_boxes[4].MinEdge.Y, centre.Z),
-		v3s16(oct_boxes[4].MaxEdge.X, oct_boxes[4].MaxEdge.Y, m_bounding_box.MaxEdge.Z)
-	);
-	oct_boxes[6] = core::aabbox3d<s16>(
-		v3s16(centre.X, oct_boxes[5].MinEdge.Y, oct_boxes[5].MinEdge.Z),
-		v3s16(m_bounding_box.MaxEdge.X, oct_boxes[5].MaxEdge.Y, oct_boxes[5].MaxEdge.Z)
-	);
-	oct_boxes[7] = core::aabbox3d<s16>(
-		v3s16(centre.X, oct_boxes[4].MinEdge.Y, oct_boxes[4].MinEdge.Z),
-		v3s16(m_bounding_box.MaxEdge.X, oct_boxes[4].MaxEdge.Y, oct_boxes[4].MaxEdge.Z)
-	);
-
-	std::array<std::vector<MapBlock *>, 8> oct_lists;
-	std::vector<u32> del_mapblocks_indices;
-
-	for (s32 k = m_mapblocks.size()-1; k >= 0; k--) {
-		core::aabbox3d<s16> box = m_mapblocks[k]->getBox();
-		for (u16 i = 0; i < 8; i++)
-			if (box.isFullInside(oct_boxes[i])) {
-				oct_lists[i].push_back(m_mapblocks[k]);
-				m_mapblocks.erase(m_mapblocks.begin() + k);
-			}
-	}
-
-	for (u16 i = 0; i < 8; i++) {
-		//infostream << "splitNode() new octree node i = " << i << std::endl;
-		m_child_nodes[i] = new OctreeNode(oct_lists[i], oct_boxes[i]);
-		m_child_nodes[i]->splitNode();
-	}
-}
-
-
-void Octree::buildTree(std::unordered_map<v2s16, MapSector *> &sectors, v3s16 cam_pos_nodes, MapDrawControl &control)
-{
-	// Clears all childs formed in the previous tree building
-	clearTree();
-
-	v3s16 blocks_min{0, 0, 0};
-	v3s16 blocks_max{0, 0, 0};
-
-	// Number of blocks currently loaded by the client
-	u32 blocks_loaded = 0;
-	// Number of blocks with mesh caught by the tree
-	u32 blocks_in_octree = 0;
-
-	/*
-	 * Calculates the min and max edges of the bounding box in nodes
-	 */
-
-	// If the limited viewing range is enabled, just gets two edge positions relatively to the camera one
-	if (!control.range_all) {
-		v3s16 box_nodes_d = v3s16(1, 1, 1) * control.wanted_range;
-
-		blocks_min = getContainerPos(cam_pos_nodes - box_nodes_d, MAP_BLOCKSIZE);
-		blocks_max = getContainerPos(cam_pos_nodes + box_nodes_d, MAP_BLOCKSIZE);
-	}
-
-	/*
-	 * Collects all mapblocks within the calculated area
-	 */
-	std::vector<MapBlock *> mapblocks;
-
-	for (auto &sector : sectors) {
-		blocks_loaded += sector.second->size();
-
-		MapBlockVect blocks_vect;
-		sector.second->getBlocks(blocks_vect);
-
-		for (auto &block : blocks_vect) {
-			if (!block)
-				continue;
-
-			v3s16 block_pos = block->getPos();
-
-			if (control.range_all) {
-				blocks_min.X = std::min(block_pos.X, blocks_min.X);
-				blocks_min.Y = std::min(block_pos.Y, blocks_min.Y);
-				blocks_min.Z = std::min(block_pos.Z, blocks_min.Z);
-
-				blocks_max.X = std::max(block_pos.X, blocks_max.X);
-				blocks_max.Y = std::max(block_pos.Y, blocks_max.Y);
-				blocks_max.Z = std::max(block_pos.Z, blocks_max.Z);
-			}
-
-			if (block->mesh) {
-				if (!control.range_all) {
-					if (blocks_min <= block_pos && block_pos <= blocks_max) {
-						mapblocks.push_back(block);
-						blocks_in_octree++;
-					}
-				}
-				else {
-					mapblocks.push_back(block);
-					blocks_in_octree++;
-				}
-
-			}
-		}
-	}
-
-	//infostream << "buildTree() blocks_loaded = " << blocks_loaded << std::endl;
-	//infostream << "buildTree() blocks_in_octree = " << blocks_in_octree << std::endl;
-	g_profiler->avg("MapBlock meshes in octree [#]", blocks_in_octree);
-	g_profiler->avg("MapBlocks loaded [#]", blocks_loaded);
-
-	core::aabbox3d<s16> box(
-		blocks_min * MAP_BLOCKSIZE, blocks_max * MAP_BLOCKSIZE + v3s16(1, 1, 1) * (MAP_BLOCKSIZE-1));
-
-	m_root_node = new OctreeNode(mapblocks, box);
-
-	// Starts recursively splitting the nodes until leafs don`t have one mapblock
-	m_root_node->splitNode();
-}
 
 // ClientMap
 
@@ -234,8 +47,6 @@ ClientMap::ClientMap(
 	m_control(control),
 	m_sorted_mapblocks(MapBlockComparer(v3s16(0,0,0))),
     m_mesh_storage(client)
-	//m_pending_sorting_mapblocks_meshes(MapBlockComparer(v3s16(0,0,0)))
-	//m_drawlist(MapBlockComparer(v3s16(0,0,0)))
 {
 	/*
 	 * @Liso: Sadly C++ doesn't have introspection, so the only way we have to know
@@ -390,84 +201,6 @@ void ClientMap::OnRegisterSceneNode()
 	// we have other way to find it
 }
 
-/*void ClientMap::getBlocksInViewRange(v3s16 cam_pos_nodes,
-		v3s16 *p_blocks_min, v3s16 *p_blocks_max, float range)
-{
-	if (range <= 0.0f)
-		range = m_control.wanted_range;
-
-	v3s16 box_nodes_d = range * v3s16(1, 1, 1);
-	// Define p_nodes_min/max as v3s32 because 'cam_pos_nodes -/+ box_nodes_d'
-	// can exceed the range of v3s16 when a large view range is used near the
-	// world edges.
-	v3s32 p_nodes_min(
-		cam_pos_nodes.X - box_nodes_d.X,
-		cam_pos_nodes.Y - box_nodes_d.Y,
-		cam_pos_nodes.Z - box_nodes_d.Z);
-	v3s32 p_nodes_max(
-		cam_pos_nodes.X + box_nodes_d.X,
-		cam_pos_nodes.Y + box_nodes_d.Y,
-		cam_pos_nodes.Z + box_nodes_d.Z);
-	// Take a fair amount as we will be dropping more out later
-	// Umm... these additions are a bit strange but they are needed.
-	*p_blocks_min = v3s16(
-			p_nodes_min.X / MAP_BLOCKSIZE - 3,
-			p_nodes_min.Y / MAP_BLOCKSIZE - 3,
-			p_nodes_min.Z / MAP_BLOCKSIZE - 3);
-	*p_blocks_max = v3s16(
-			p_nodes_max.X / MAP_BLOCKSIZE + 1,
-			p_nodes_max.Y / MAP_BLOCKSIZE + 1,
-			p_nodes_max.Z / MAP_BLOCKSIZE + 1);
-}*/
-
-/*class MapBlockFlags
-{
-public:
-	static constexpr u16 CHUNK_EDGE = 8;
-	static constexpr u16 CHUNK_MASK = CHUNK_EDGE - 1;
-	static constexpr std::size_t CHUNK_VOLUME = CHUNK_EDGE * CHUNK_EDGE * CHUNK_EDGE; // volume of a chunk
-
-	MapBlockFlags(v3s16 min_pos, v3s16 max_pos)
-			: min_pos(min_pos), volume((max_pos - min_pos) / CHUNK_EDGE + 1)
-	{
-		chunks.resize(volume.X * volume.Y * volume.Z);
-	}
-
-	class Chunk
-	{
-	public:
-		inline u8 &getBits(v3s16 pos)
-		{
-			std::size_t address = getAddress(pos);
-			return bits[address];
-		}
-
-	private:
-		inline std::size_t getAddress(v3s16 pos) {
-			std::size_t address = (pos.X & CHUNK_MASK) + (pos.Y & CHUNK_MASK) * CHUNK_EDGE + (pos.Z & CHUNK_MASK) * (CHUNK_EDGE * CHUNK_EDGE);
-			return address;
-		}
-
-		std::array<u8, CHUNK_VOLUME> bits;
-	};
-
-	Chunk &getChunk(v3s16 pos)
-	{
-		v3s16 delta = (pos - min_pos) / CHUNK_EDGE;
-		std::size_t address = delta.X + delta.Y * volume.X + delta.Z * volume.X * volume.Y;
-		Chunk *chunk = chunks[address].get();
-		if (!chunk) {
-			chunk = new Chunk();
-			chunks[address].reset(chunk);
-		}
-		return *chunk;
-	}
-private:
-	std::vector<std::unique_ptr<Chunk>> chunks;
-	v3s16 min_pos;
-	v3s16 volume;
-};*/
-
 void ClientMap::rebuildOctree()
 {
 	if (!m_needs_rebuild_octree)
@@ -568,8 +301,6 @@ void ClientMap::updateDrawBuffers()
 	u32 sorted_blocks = 0;
 
 	std::list<MeshLayer *> new_layers;
-    //std::vector<MeshRef> mesh_parts;
-    //std::map<v3f, MeshTriangle, TriangleComparer> sorted_triangles{TriangleComparer(m_camera_position)};
 
 	//infostream << "updateDrawBuffers() 3" << std::endl;
 	for (auto &block_p : m_sorted_mapblocks) {
@@ -596,7 +327,7 @@ void ClientMap::updateDrawBuffers()
 			MeshPart &new_part = block_layer.second;
 
 			if (last_part.vertices.size() + new_part.vertices.size() > U32_MAX) {
-				mesh_list.push_back(MeshPart());
+				mesh_list.emplace_back();
 				last_part = mesh_list.back();
 			}
 
@@ -609,24 +340,9 @@ void ClientMap::updateDrawBuffers()
 
 			last_part.indices.insert(last_part.indices.end(), new_part.indices.begin(), new_part.indices.end());
 		}
-        //mesh_parts.push_back(block->mesh->getMesh());
-		//auto &unsorted_triangles = block->mesh->m_transparent_triangles;
-
-		//if (!unsorted_triangles.empty()) {
-        //    sorted_triangles.insert(unsorted_triangles.begin(), unsorted_triangles.end());
-		//	sorted_blocks++;
-		//}
 	}
 
 	m_mesh_storage.mergeNewLayers(new_layers);
-	/*infostream << "updateDrawBuffers() m_sorted_mapblocks loop: " << updatebuffers_time.getTimerTime() << "us" << std::endl;
-	//infostream << "updateDrawBuffers() 4" << std::endl;
-    m_mesh_storage.prepareTransparentMeshes(sorted_triangles);
-	infostream << "updateDrawBuffers() prepareTransparentMeshes: " << updatebuffers_time.getTimerTime() << "us" << std::endl;
-	//infostream << "updateDrawBuffers() 5" << std::endl;
-    m_mesh_storage.prepareSolidMeshes(mesh_parts);
-	infostream << "updateDrawBuffers() prepareSolidMeshes: " << updatebuffers_time.getTimerTime() << "us" << std::endl;
-	//infostream << "updateDrawBuffers() 6" << std::endl;*/
 
 	m_needs_update_transparent_meshes = false;
 
@@ -704,127 +420,6 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 				drawcall_count++;
 			}
 		}
-	/*else
-		for (auto &layer_vbo : m_transparent_vbos) {
-			video::SMaterial mat_copy(layer_vbo.first);
-			mat_copy.Wireframe = m_control.show_wireframe;
-
-			driver->setMaterial(mat_copy);
-
-			driver->drawVertexBuffer(layer_vbo.second);
-
-			drawcall_count++;
-		}*/
-	/*if (pass == scene::ESNRP_SOLID)
-		for (auto &p : m_sorted_mapblocks) {
-			if (!p.second->mesh)
-				continue;
-
-            m_mesh_storage.renderSolidVBOs(driver, m_control.show_wireframe, drawcall_count);
-		}
-	else
-        m_mesh_storage.renderTransparentVBOs(driver, m_control.show_wireframe, drawcall_count);*/
-
-	// Render all mesh buffers in order
-	/*if (pass == scene::ESNRP_SOLID)
-		for (auto &layer : m_layers) {
-			layer.Wireframe = m_control.show_wireframe;
-			driver->setMaterial(layer);
-
-			// Do reversing looping to avoid the overdraw
-			auto mb_it = m_sorted_mapblocks.rbegin();
-
-			for (; mb_it != m_sorted_mapblocks.rend(); ++mb_it) {
-				auto mb_mesh = mb_it->second->mesh;
-				if (!mb_mesh)
-					continue;
-
-				GroupedBuffers &buffers = mb_mesh->getBuffers();
-
-				for (auto &mat_buffers : buffers) {
-					if (mat_buffers.first != layer)
-						continue;
-
-					for (auto &buffer : mat_buffers.second) {
-						driver->drawMeshBuffer(buffer);
-						vertex_count += buffer->getIndexCount();
-						drawcall_count++;
-					}
-				}
-			}
-		}
-	else if (pass == scene::ESNRP_TRANSPARENT)
-		for (auto &p : m_sorted_mapblocks) {
-			if (!p.second->mesh)
-				continue;
-
-			auto &tbuffers = p.second->mesh->getTransparentBuffers();
-
-			for (auto &p_buffer : tbuffers) {
-				scene::IMeshBuffer *buf = p_buffer.getBuffer();
-
-				auto &material = buf->getMaterial();
-				material.Wireframe = m_control.show_wireframe;
-
-				driver->setMaterial(material);
-
-				p_buffer.beforeDraw();
-				driver->drawMeshBuffer(buf);
-				p_buffer.afterDraw();
-
-				vertex_count += buf->getIndexCount();
-				drawcall_count++;
-			}
-		}*/
-
-
-		/*for (auto &buf_p : m_solid_buffers) {
-			scene::IMeshBuffer *buf = buf_p.second;
-
-			infostream << "renderMap() ESNRP_SOLID current rendered buffer: " << buf << std::endl;
-			if (!buf)
-				continue;
-
-			auto &material = buf->getMaterial();
-			material.Wireframe = m_control.show_wireframe;
-
-			driver->setMaterial(material);
-
-			driver->setTransform(video::ETS_WORLD, m);
-			driver->drawMeshBuffer(buf);
-			vertex_count += buf->getIndexCount();
-		}
-		drawcall_count += m_solid_buffers.size();*/
-
-	/*if (pass == scene::ESNRP_TRANSPARENT) {
-		for (auto &p_tbuf : m_transparent_buffers) {
-
-			infostream << "renderMap() ESNRP_TRANSPARENT current rendered partial buffer: " << p_tbuf << std::endl;
-			if (!p_tbuf)
-				continue;
-
-			scene::IMeshBuffer *buf = p_tbuf->getBuffer();
-			infostream << "renderMap() ESNRP_TRANSPARENT current rendered buffer: " << buf << std::endl;
-
-			if (!buf)
-				continue;
-			auto &material = buf->getMaterial();
-			material.Wireframe = m_control.show_wireframe;
-
-			driver->setMaterial(material);
-
-			driver->setTransform(video::ETS_WORLD, m);
-
-			p_tbuf->beforeDraw();
-			driver->drawMeshBuffer(buf);
-			p_tbuf->afterDraw();
-
-			vertex_count += buf->getIndexCount();
-		}
-		drawcall_count += m_transparent_buffers.size();
-
-		g_profiler->avg("renderMap(): transparent buffers [#]", m_transparent_buffers.size());
-	}*/
 
 	//infostream << "renderMap() solid materials count: " << materials_count << std::endl;
 	//infostream << "renderMap() drawcall_count = " << drawcall_count << std::endl;
@@ -1201,89 +796,6 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 	g_profiler->avg("MapBlocks drawn [#]", m_drawlist.size());
 }*/
 
-/*void ClientMap::touchMapBlocks()
-{
-	ScopeProfiler sp(g_profiler, "CM::touchMapBlocks()", SPT_AVG);
-
-	// Number of blocks currently loaded by the client
-	//u32 blocks_loaded = 0;
-	// Number of blocks with mesh in the octree
-	u32 blocks_in_octree = 0;
-
-	auto touch = [&] (const OctreeNode *node) {
-		auto blocks = node->getMapBlocks();
-
-		for (auto &block : blocks) {
-			blocks_in_octree++;
-
-			block->resetUsageTimer();
-		}
-
-		return true;
-	};
-
-	m_octree.traverseTree(touch);*/
-	/*v3s16 cam_pos_nodes = floatToInt(m_camera_position, BS);
-
-	v3s16 p_blocks_min;
-	v3s16 p_blocks_max;
-	getBlocksInViewRange(cam_pos_nodes, &p_blocks_min, &p_blocks_max);
-
-	// Number of blocks currently loaded by the client
-	u32 blocks_loaded = 0;
-	// Number of blocks with mesh in rendering range
-	u32 blocks_in_range_with_mesh = 0;
-
-	for (const auto &sector_it : m_sectors) {
-		const MapSector *sector = sector_it.second;
-		v2s16 sp = sector->getPos();
-
-		blocks_loaded += sector->size();
-		if (!m_control.range_all) {
-			if (sp.X < p_blocks_min.X || sp.X > p_blocks_max.X ||
-					sp.Y < p_blocks_min.Z || sp.Y > p_blocks_max.Z)
-				continue;
-		}*/
-
-		/*
-			Loop through blocks in sector
-		*/
-
-		/*for (const auto &entry : sector->getBlocks()) {
-			MapBlock *block = entry.second.get();
-			MapBlockMesh *mesh = block->mesh;
-
-			// Calculate the coordinates for range and frustum culling
-			v3f mesh_sphere_center;
-			f32 mesh_sphere_radius;
-
-			v3s16 block_pos_nodes = block->getPosRelative();
-
-			if (mesh) {
-				mesh_sphere_center = intToFloat(block_pos_nodes, BS)
-						+ mesh->getBoundingSphereCenter();
-				mesh_sphere_radius = mesh->getBoundingRadius();
-			} else {
-				mesh_sphere_center = intToFloat(block_pos_nodes, BS)
-						+ v3f((MAP_BLOCKSIZE * 0.5f - 0.5f) * BS);
-				mesh_sphere_radius = 0.0f;
-			}
-
-			// First, perform a simple distance check.
-			if (!m_control.range_all &&
-				mesh_sphere_center.getDistanceFrom(m_camera_position) >
-					m_control.wanted_range * BS + mesh_sphere_radius)
-				continue; // Out of range, skip.
-
-			// Keep the block alive as long as it is in range.
-			block->resetUsageTimer();
-			blocks_in_range_with_mesh++;
-		}
-	}*/
-
-//	g_profiler->avg("MapBlock meshes in octree [#]", blocks_in_octree);
-	//g_profiler->avg("MapBlocks loaded [#]", blocks_loaded);
-//}
 
 /*void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 {
