@@ -31,7 +31,9 @@ class Client;
 struct TileSpec;
 struct MeshTriangle;
 
-// Abstraction containing buffers of the same material
+using StorageBuffers = std::list<std::pair<video::SMaterial, std::list<scene::IVertexBuffer *>>>;
+
+// Abstraction containing mesh sets of the same material
 struct MeshLayer
 {
 	// Material of the layer
@@ -47,35 +49,44 @@ struct MeshLayer
 	}
 };
 
-// Abstraction saving all layers of the scene (mapblocks or wieldmesh)
+// Cubic level consisting of other cubic sublevels
+// The upper level contains 8x8x8 mapblocks, the lower one is 4x4x4, then 2x2x2 and the mapblock itself
+// Each level has an own merged meshes scattered through layers
+// MeshLevel is also an octree node containing other MeshLevels as octants
 class MeshStorage
 {
+public:
+	std::atomic<bool> storage_updated = false;
+
+    MeshStorage(Client *client)
+		: m_client(client) {}
+
+    ~MeshStorage();
+
+    DISABLE_CLASS_COPY(MeshStorage) // copying of the layers is prohibited
+
+	void mergeNewLayers(const std::list<MeshLayer *> &new_layers);
+
+    void rebuildSolidBuffers(video::IVideoDriver *driver);
+
+	void renderBuffers(video::IVideoDriver *driver, bool wireframe, u32 &drawcall_count);
+   // void rebuildTransparentVBOs(video::IVideoDriver *driver,
+	//	std::vector<std::pair<video::SMaterial, scene::IVertexBuffer *>> &vbos);
+
+	void updateLighting(video::SColorf &day_color);
+
+private:
 	Client *m_client;
 
 	std::atomic<bool> needs_rebuild_tvbos = false;
 
 	std::list<MeshLayer *> m_layers;
+	StorageBuffers m_buffers;
 
 	// Baked transparent mesh sets for rebuilding vbos
-	std::list<std::pair<video::SMaterial, MeshPart>> m_transparent_mesh;
+	//std::list<std::pair<video::SMaterial, MeshPart>> m_transparent_mesh;
 
 	// Many mesh generation threads, update clientmap and also main one may access to the layers simultaneously
-	std::mutex m_layers_mutex;
-	std::mutex m_tmesh_mutex;
-
-public:
-	std::atomic<bool> layers_updated = false;
-
-	MeshStorage(Client *client);
-
-	DISABLE_CLASS_COPY(MeshStorage) // copying of the layers is prohibited
-
-	void mergeNewLayers(const std::list<MeshLayer *> &new_layers);
-
-    void rebuildSolidVBOs(video::IVideoDriver *driver,
-        std::list<std::pair<video::SMaterial, std::list<scene::IVertexBuffer *>>> &vbos);
-   // void rebuildTransparentVBOs(video::IVideoDriver *driver,
-	//	std::vector<std::pair<video::SMaterial, scene::IVertexBuffer *>> &vbos);
-
-	void updateLighting(video::SColorf &day_color);
+    //std::mutex m_layers_mutex;
+	//std::mutex m_tmesh_mutex;
 };

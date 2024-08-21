@@ -26,33 +26,40 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "log.h"
 #include "client/mesh.h"
 #include "client/shader.h"
+#include "util/timetaker.h"
+#include "log.h"
+
+MapblockMeshCollector::MapblockMeshCollector(Client *_client, v3f _center_pos,
+		v3f _offset, v3f _translation)
+	: client(_client), info(_center_pos, _offset, _translation),
+	  atlas(_client->getNodeDefManager()->getAtlas()),
+	  shdrsrc(_client->getShaderSource()),
+	  tsrc(_client->getTextureSource())
+{
+	temp_material.Lighting = false;
+	temp_material.FogEnable = true;
+	temp_material.setTexture(0, atlas->getTexture());
+	temp_material.forEachTexture([] (auto &tex) {
+		setMaterialFilters(tex,
+			g_settings->getBool("bilinear_filter"),
+			g_settings->getBool("trilinear_filter"),
+			g_settings->getBool("anisotropic_filter")
+		);
+	});
+}
 
 void MapblockMeshCollector::addTileMesh(const TileSpec &tile,
     const video::S3DVertex *vertices, u32 numVertices,
     const u16 *indices, u32 numIndices, v3f pos,
     video::SColor clr, u8 light_source, bool own_color)
 {
+	//TimeTaker add_tile_mesh_time("Add tile mesh", nullptr, PRECISION_MICRO);
 
     assert(numVertices <= U32_MAX);
 
-    TextureAtlas *atlas = client->getNodeDefManager()->getAtlas();
     core::dimension2du atlas_size = atlas->getTextureSize();
 
-    // Create material
-    video::SMaterial material;
-    material.Lighting = false;
-    material.FogEnable = true;
-    material.setTexture(0, atlas->getTexture());
-    material.forEachTexture([] (auto &tex) {
-        setMaterialFilters(tex,
-            g_settings->getBool("bilinear_filter"),
-            g_settings->getBool("trilinear_filter"),
-            g_settings->getBool("anisotropic_filter")
-        );
-    });
-
-    IWritableShaderSource *shdrsrc = client->getShaderSource();
-    ITextureSource *tsrc = client->getTextureSource();
+	//infostream << "Add tile mesh 1 time: " << add_tile_mesh_time.getTimerTime() << "us" << std::endl;
 
     for (int layernum = 0; layernum < MAX_TILE_LAYERS; layernum++) {
         const TileLayer &layer = tile.layers[layernum];
@@ -64,7 +71,7 @@ void MapblockMeshCollector::addTileMesh(const TileSpec &tile,
             scale = 1.0f / layer.scale;
 
         // Creating material
-        video::SMaterial material_copy(material);
+        video::SMaterial material_copy(temp_material);
 
         if (g_settings->getBool("enable_shaders")) {
             material_copy.MaterialType = shdrsrc->getShaderInfo(
@@ -92,6 +99,7 @@ void MapblockMeshCollector::addTileMesh(const TileSpec &tile,
             // Shift each UV by the half-width of the atlas to locate it in the separate right side
             tile_pos_shift = atlas_size.Width / 2;
         }
+        //infostream << "Add tile mesh 1.1 time: " << add_tile_mesh_time.getTimerTime() << "us" << std::endl;
 
         // Find already existent prelayer with such material, otherwise create it
         auto layer_it = std::find_if(layers.begin(), layers.end(),
@@ -104,6 +112,7 @@ void MapblockMeshCollector::addTileMesh(const TileSpec &tile,
             layers.emplace_back(material_copy, MeshPart());
             layer_it = layers.end()-1;
         }
+        //infostream << "Add tile mesh 1.2 time: " << add_tile_mesh_time.getTimerTime() << "us" << std::endl;
 
         MeshPart &mesh_p = layer_it->second;
 
@@ -148,9 +157,13 @@ void MapblockMeshCollector::addTileMesh(const TileSpec &tile,
                     (vertex.Pos - info.center_pos).getLengthSQ());
         }
 
+       // infostream << "Add tile mesh 2 time: " << add_tile_mesh_time.getTimerTime() << "us" << std::endl;
         for (u32 i = 0; i < numIndices; i++)
             mesh_p.indices.push_back(vertex_count + indices[i]);
+
+		//infostream << "Add tile mesh 3 time: " << add_tile_mesh_time.getTimerTime() << "us" << std::endl;
     }
+    //add_tile_mesh_time.stop(true);
 }
 
 size_t MapblockMeshCollector::getSize() const
@@ -170,6 +183,7 @@ void WieldMeshCollector::addTileMesh(const TileSpec &tile,
 	const u16 *indices, u32 numIndices, v3f pos,
 	video::SColor clr, u8 light_source, bool own_color)
 {
+	TimeTaker add_tile_mesh_time("Add tile mesh", nullptr, PRECISION_MICRO);
 	for (int layernum = 0; layernum < MAX_TILE_LAYERS; layernum++) {
 		const TileLayer &layer = tile.layers[layernum];
 		if (layer.texture_id == 0)
@@ -201,6 +215,7 @@ void WieldMeshCollector::addTileMesh(const TileSpec &tile,
 		for (u32 i = 0; i < numIndices; i++)
 			p.indices.push_back(indices[i] + vertex_count);
 	}
+	add_tile_mesh_time.stop(false);
 }
 
 WieldPreMeshBuffer &WieldMeshCollector::findBuffer(

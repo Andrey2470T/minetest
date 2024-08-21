@@ -696,7 +696,7 @@ void Camera::removeNametag(Nametag *nametag)
 	delete nametag;
 }
 
-std::array<core::plane3d<f32>, 5> Camera::getFrustumCullPlanes() const
+std::array<core::plane3d<f32>, 6> Camera::getFrustumCullPlanes() const
 {
 	using irr::scene::SViewFrustum;
 	const auto &frustum_planes = m_cameranode->getViewFrustum()->planes;
@@ -705,6 +705,7 @@ std::array<core::plane3d<f32>, 5> Camera::getFrustumCullPlanes() const
 		frustum_planes[SViewFrustum::VF_RIGHT_PLANE],
 		frustum_planes[SViewFrustum::VF_BOTTOM_PLANE],
 		frustum_planes[SViewFrustum::VF_TOP_PLANE],
+		frustum_planes[SViewFrustum::VF_NEAR_PLANE],
 		frustum_planes[SViewFrustum::VF_FAR_PLANE]
 	};
 }

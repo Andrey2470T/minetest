@@ -230,13 +230,13 @@ void TextureAtlas::updateCrackAnimations(int new_crack)
 			m_atlas_texture->drawToSubImage(tile.x + atlas_size.Width/2, tile.y, tile.width, tile.height, new_texture);
 		}
 	}
-	infostream << "updateCrackAnimations() 3" << std::endl;
-	infostream << "updateCrackAnimations() 4" << std::endl;
+	//infostream << "updateCrackAnimations() 3" << std::endl;
+	//infostream << "updateCrackAnimations() 4" << std::endl;
 
 	if (m_driver->getTextureCreationFlag(video::ETCF_CREATE_MIP_MAPS) && has_crack_tiles) {
 		// Each tile in both sides of the atlas must have not less 2 pixels in a mip
 		u32 min_pixels_count = m_tiles_infos.size()*8;
 		m_atlas_texture->regenerateMipMapLevels(0, 0, min_pixels_count);
 	}
-	infostream << "updateCrackAnimations() 5" << std::endl;
+	//infostream << "updateCrackAnimations() 5" << std::endl;
 }

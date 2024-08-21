@@ -740,19 +740,11 @@ void COpenGL3DriverBase::drawVertexBuffer(const scene::IVertexBuffer *vbuffer)
 	if (!vbuffer)
 		return;
 
-	if (!vbuffer->canBeDrawn())
-		return;
-
 	setRenderStates3DMode();
 
 	vbuffer->bind();
 
-	auto &vTypeDesc = getVertexTypeDescription(vbuffer->getVertexType());
-    setVBOAttributes(vTypeDesc);
-
 	vbuffer->draw(this, LastMaterial);
-
-    unsetVertexAttributes(vTypeDesc);
 
 	vbuffer->unbind();
 }
@@ -772,7 +764,7 @@ void COpenGL3DriverBase::drawVertexPrimitiveList(const void *vertices, u32 verte
 
 	setRenderStates3DMode();
 
-	auto &vTypeDesc = getVertexTypeDescription(vType);
+    auto &vTypeDesc = getVertexTypeDescription(vType);
     setVertexAttributes(vTypeDesc, reinterpret_cast<uintptr_t>(vertices));
 	GLenum indexSize = 0;
 
@@ -1136,19 +1128,19 @@ void COpenGL3DriverBase::setVertexAttributes(const VertexType &vertexType, uintp
         GL.EnableVertexAttribArray(attr.Index);
         switch (attr.mode) {
         case VertexAttribute::Mode::Regular:
-            GL.VertexAttribPointer(attr.Index, attr.ComponentCount, attr.ComponentType, GL_FALSE, vertexType.VertexSize, reinterpret_cast<void *>(verticesBase + attr.Offset));
+            GL.VertexAttribPointer(attr.Index, attr.ComponentCount, (GLenum)attr.ComponentType, GL_FALSE, vertexType.VertexSize, reinterpret_cast<void *>(verticesBase + attr.Offset));
             break;
         case VertexAttribute::Mode::Normalized:
-            GL.VertexAttribPointer(attr.Index, attr.ComponentCount, attr.ComponentType, GL_TRUE, vertexType.VertexSize, reinterpret_cast<void *>(verticesBase + attr.Offset));
+            GL.VertexAttribPointer(attr.Index, attr.ComponentCount, (GLenum)attr.ComponentType, GL_TRUE, vertexType.VertexSize, reinterpret_cast<void *>(verticesBase + attr.Offset));
             break;
         case VertexAttribute::Mode::Integral:
-            GL.VertexAttribIPointer(attr.Index, attr.ComponentCount, attr.ComponentType, vertexType.VertexSize, reinterpret_cast<void *>(verticesBase + attr.Offset));
+            GL.VertexAttribIPointer(attr.Index, attr.ComponentCount, (GLenum)attr.ComponentType, vertexType.VertexSize, reinterpret_cast<void *>(verticesBase + attr.Offset));
             break;
         }
     }
 }
 
-void COpenGL3DriverBase::setVBOAttributes(const VertexType &vertexType)
+/*void COpenGL3DriverBase::setVBOAttributes(const VertexType &vertexType)
 {
 	for (auto &attr : vertexType.Attributes) {
 		GL.EnableVertexAttribArray(attr.Index);
@@ -1164,7 +1156,7 @@ void COpenGL3DriverBase::setVBOAttributes(const VertexType &vertexType)
 			break;
 		}
 	}
-}
+}*/
 
 void COpenGL3DriverBase::unsetVertexAttributes(const VertexType &vertexType)
 {

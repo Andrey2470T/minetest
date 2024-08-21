@@ -27,14 +27,19 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "util/timetaker.h"
 
 
-MeshStorage::MeshStorage(Client *client)
-	: m_client(client)
-{}
+MeshStorage::~MeshStorage()
+{
+    for (auto layer : m_layers)
+        delete layer;
+
+    for (auto &buffers_layer : m_buffers)
+        for (auto buffer : buffers_layer.second)
+            if (buffer)
+                delete buffer;
+}
 
 void MeshStorage::mergeNewLayers(const std::list<MeshLayer *> &new_layers)
 {
-	MutexAutoLock layers_lock(m_layers_mutex);
-
 	// Remove old layers
 	for (auto layer : m_layers)
 		delete layer;
@@ -45,14 +50,11 @@ void MeshStorage::mergeNewLayers(const std::list<MeshLayer *> &new_layers)
 	for (auto new_layer : new_layers)
 		m_layers.push_back(new_layer);
 
-	layers_updated = true;
+	storage_updated = true;
 }
 
 void MeshStorage::updateLighting(video::SColorf &day_color)
 {
-	MutexAutoLock layers_lock(m_layers_mutex);
-
-	// Update for solid meshes
 	for (auto layer : m_layers)
 		for (auto &mesh_part : layer->merged_mesh) {
 			auto &vertices = mesh_part.vertices;
@@ -63,40 +65,51 @@ void MeshStorage::updateLighting(video::SColorf &day_color)
 						day_color);
 		}
 
-	layers_updated = true;
+	storage_updated = true;
 }
 
-void MeshStorage::rebuildSolidVBOs(video::IVideoDriver *driver,
-	std::list<std::pair<video::SMaterial, std::list<scene::IVertexBuffer *>>> &vbos)
+void MeshStorage::rebuildSolidBuffers(video::IVideoDriver *driver)
 {
-	if (!layers_updated)
+	if (!storage_updated)
 		return;
 
-	layers_updated = false;
+	TimeTaker rebuild_vbos_time("Rebuilding VBOs", nullptr, PRECISION_MICRO);
+	storage_updated = false;
 
-	// Remove old vbos
-	for (auto &old_layer_vbos : vbos)
-		for (auto old_vbo : old_layer_vbos.second)
-			if (old_vbo)
-				delete old_vbo;
 
-	vbos.clear();
+	for (auto &buffers_layer : m_buffers)
+		for (auto buffer : buffers_layer.second)
+			if (buffer)
+				delete buffer;
 
-	// Add new vbos
-	MutexAutoLock layers_lock(m_layers_mutex);
+	m_buffers.clear();
 
-	for (auto new_layer : m_layers) {
-		std::list<scene::IVertexBuffer *> new_vbos;
-		for (auto &mesh_part : new_layer->merged_mesh) {
-			scene::IVertexBuffer *new_vbo = driver->createVertexBuffer();
-			new_vbo->formatBuffer();
-			new_vbo->uploadVertexData(mesh_part.vertices.size(), mesh_part.vertices.data());
-			new_vbo->uploadIndexData(mesh_part.indices.size(), mesh_part.indices.data());
+	for (auto layer : m_layers) {
+        m_buffers.push_back(std::make_pair(layer->material, std::list<scene::IVertexBuffer *>()));
 
-			new_vbos.push_back(new_vbo);
+		for (auto &mesh_part : layer->merged_mesh) {
+			scene::IVertexBuffer *new_buffer = driver->createVertexBuffer();
+			new_buffer->uploadData(mesh_part.vertices.size(), mesh_part.vertices.data(),
+				mesh_part.indices.size(), mesh_part.indices.data());
+
+			m_buffers.back().second.push_back(new_buffer);
 		}
+	}
+}
 
-		vbos.emplace_back(new_layer->material, new_vbos);
+void MeshStorage::renderBuffers(video::IVideoDriver *driver, bool wireframe, u32 &drawcall_count)
+{
+	for (auto &buffers_layer : m_buffers) {
+		video::SMaterial mat_copy(buffers_layer.first);
+		mat_copy.Wireframe = wireframe;
+
+		driver->setMaterial(mat_copy);
+
+		for (auto buffer : buffers_layer.second) {
+			driver->drawVertexBuffer(buffer);
+
+			drawcall_count++;
+		}
 	}
 }
 

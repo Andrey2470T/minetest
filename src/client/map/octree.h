@@ -18,99 +18,164 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "irrlichttypes_extrabloated.h"
 #include <array>
-#include <vector>
-#include <unordered_map>
 #include <functional>
 #include "mapblock.h"
-#include "mapsector.h"
+#include "mapblock_mesh.h"
+#include "mesh_storage.h"
 
-class MapDrawControl;
+// The grid-aligned octree size is 8x8x8 mapblocks
+#define OCTREE_SIZE 8
 
-// Octree for accelerated frustum culling
+struct MapDrawControl;
+class Client;
+
+// Octree for accelerating the frustum culling
 class OctreeNode
 {
 public:
-	OctreeNode(std::vector<MapBlock *> mapblocks, core::aabbox3d<s16> box)
-		: m_mapblocks(mapblocks), m_bounding_box(box)
+    OctreeNode(core::aabbox3d<s16> bounding_box, s16 size)
+		: m_bounding_box(bounding_box), m_size(size)
 	{
-		for (u32 i = 0; i < 8; i++)
+		for (u16 i = 0; i < 8; i++)
 			m_child_nodes[i] = nullptr;
 	}
 
-	~OctreeNode()
+    virtual ~OctreeNode()
 	{
-		// If this is not a leaf node, recursively delete its childs
 		for (auto node : m_child_nodes)
 			if (node)
 				delete node;
+
+        if (storage)
+            delete storage;
 	}
 
-	void splitNode();
+    DISABLE_CLASS_COPY(OctreeNode)
+
+    void splitNode();
 
 	// Calls some callback for this node and in case true continue traversing through its children
-	void traverseNode(std::function<bool(const OctreeNode *)> func)
+    void traverseNode(std::function<bool(const OctreeNode *)> func) const
 	{
 		bool result = func(this);
 
 		if (result)
-			for (auto &next_node : m_child_nodes)
-				if (next_node)
+			for (auto next_node : m_child_nodes)
+                if (next_node)
 					next_node->traverseNode(func);
 	}
 
-	const std::vector<MapBlock *> &getMapBlocks() const
-	{
-		return m_mapblocks;
+    bool traverseNodeForAdd(MapBlock *mp);
+
+    bool traverseNodeForDelete(v3s16 pos);
+
+    s16 getSize() const { return m_size; }
+    s16 getVolume() const { return m_size * m_size * m_size; }
+
+    v3f getCenter() const // in nodes
+    {
+        v3f min_pos_f = intToFloat(m_bounding_box.MinEdge * MAP_BLOCKSIZE, BS);
+        v3f max_pos_f = intToFloat(m_bounding_box.MaxEdge * MAP_BLOCKSIZE + (MAP_BLOCKSIZE - 1), BS);
+
+        return aabb3f(min_pos_f, max_pos_f).getCenter();
+    }
+
+    f32 getRadius() const // in nodes
+    {
+        v3f min_pos_f = intToFloat(m_bounding_box.MinEdge * MAP_BLOCKSIZE, BS);
+        v3f max_pos_f = intToFloat(m_bounding_box.MaxEdge * MAP_BLOCKSIZE + (MAP_BLOCKSIZE - 1), BS);
+
+        return ((max_pos_f - min_pos_f) / 2.0f).getLength();
+    }
+
+    MapblockMeshCollector *getMapblockMesh() const {
+        if (!m_mapblock.second || !m_mapblock.second->mesh)
+            return nullptr;
+
+        return m_mapblock.second->mesh->getMesh();
+    }
+
+    bool resetMapblockTimer() const
+    {
+		if (!m_mapblock.second)
+			return false;
+
+		m_mapblock.second->resetUsageTimer();
+
+		return true;
 	}
 
-	core::aabbox3d<s16> getBox() const
-	{
-		return m_bounding_box;
-	}
+    bool need_rebuild = false;
 
-	u32 getFullCountOfMapBlocks() const
-	{
-		u32 mapblocks_count = 0;
-
-		mapblocks_count += m_mapblocks.size();
-
-		for (auto &node : m_child_nodes)
-			if (node)
-				mapblocks_count += node->getFullCountOfMapBlocks();
-
-		return mapblocks_count;
-	}
+    MeshStorage *storage = nullptr;
 private:
-	std::array<OctreeNode *, 8> m_child_nodes;
+    std::array<OctreeNode *, 8> m_child_nodes;
 
-	std::vector<MapBlock *> m_mapblocks;
+    std::pair<v3s16, MapBlock *> m_mapblock;
 
-	core::aabbox3d<s16> m_bounding_box; // in nodes
+	core::aabbox3d<s16> m_bounding_box; // in blocks
+    s16 m_size;                         // in blocks
 };
 
 class Octree
 {
 public:
-	Octree() = default;
+    Octree() = default;
 
-	void buildTree(std::unordered_map<v2s16, MapSector *> &sectors, v3s16 cam_pos_nodes, MapDrawControl &control);
-
-	void traverseTree(std::function<bool(const OctreeNode *)> func)
+    ~Octree()
 	{
-		if (!m_root_node)
+		clearTree();
+	}
+
+    DISABLE_CLASS_COPY(Octree)
+
+	// Creates the root node and splits it recursively into 8 octants
+	// until the box size of the children is not equal to the mapblock one
+    void buildTree(v3s16 corner_pos_blocks, s16 size, MapDrawControl &control);
+
+	// Checks if the octree was built
+	bool isBuilt() const { return m_root_node != nullptr; }
+
+	// Traverses through the tree recursively with some callback
+    void traverseTree(std::function<bool(const OctreeNode *)> func) const
+	{
+		if (!isBuilt())
 			return;
 
 		m_root_node->traverseNode(func);
 	}
 
-	bool isBuilt() { return m_root_node != nullptr; }
+    void traverseTreeForAdd(MapBlock *mp)
+    {
+        if (!isBuilt())
+            return;
 
+        m_root_node->traverseNodeForAdd(mp);
+    }
+
+    void traverseTreeForDelete(v3s16 pos)
+    {
+        if (!isBuilt())
+            return;
+
+        m_root_node->traverseNodeForDelete(pos);
+    }
+
+	// Clears all children recursively
 	void clearTree()
 	{
-		if (m_root_node)
+		if (isBuilt())
 			delete m_root_node;
 	}
 
+    void markNeedsRebuild()
+    {
+        if (isBuilt())
+            m_root_node->need_rebuild = true;
+    }
+
+	std::map<v3s16, MapBlock *> mapblocks;
+
 private:
-	OctreeNode *m_root_node = nullptr;
+    OctreeNode *m_root_node;
 };

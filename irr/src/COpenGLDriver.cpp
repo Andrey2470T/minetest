@@ -263,6 +263,7 @@ void COpenGLDriver::setTransform(E_TRANSFORMATION_STATE state, const core::matri
 
 scene::IVertexBuffer *COpenGLDriver::createVertexBuffer()
 {
+    return nullptr;
 }
 
 bool COpenGLDriver::updateVertexHardwareBuffer(SHWBufferLink_opengl *HWBuffer)

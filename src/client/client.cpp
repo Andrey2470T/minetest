@@ -477,6 +477,7 @@ void Client::step(float dtime)
 			g_settings->getS32("client_mapblock_limit"),
 			&deleted_blocks);
 
+        m_env.getClientMap().pushDeletedBlocks(deleted_blocks);
 		/*
 			Send info to server
 			NOTE: This loop is intentionally iterated the way it is.
@@ -618,9 +619,9 @@ void Client::step(float dtime)
                         //delete r.mesh;
                     //else {
 						// Replace with the new mesh
-						block->mesh = r.mesh;
-						if (r.urgent)
-							force_update_shadows = true;
+                    block->mesh = r.mesh;
+                    if (r.urgent)
+                        force_update_shadows = true;
 
 				}
 			} else {

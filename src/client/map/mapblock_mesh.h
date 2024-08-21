@@ -22,7 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "irrlichttypes_extrabloated.h"
 #include "util/numeric.h"
 #include "client/tile.h"
-#include "mesh_storage.h"
+#include "client/mesh_collector.h"
 #include "voxel.h"
 #include <array>
 #include <map>
@@ -171,17 +171,17 @@ public:
 		return minimap_mapblocks;
 	}
 
-	/// Radius of the bounding-sphere, in BS-space.
-	f32 getBoundingRadius() const { return m_mesh ? m_mesh->info.bounding_radius : 0.0f; }
+    // Radius of the bounding-sphere, in BS-space.
+    //f32 getBoundingRadius() const { return m_mesh ? m_mesh->info.bounding_radius : 0.0f; }
 
-	/// Center of the bounding-sphere, in BS-space, relative to block pos.
-	v3f getBoundingSphereCenter() const { return m_mesh ? m_mesh->info.center_pos : v3f(0.0f); }
+    // Center of the bounding-sphere, in BS-space, relative to block pos.
+    //v3f getBoundingSphereCenter() const { return m_mesh ? m_mesh->info.center_pos : v3f(0.0f); }
 
-	/// update transparent buffers to render towards the camera
+    // update transparent buffers to render towards the camera
 	//void updateTransparentBuffers(v3f camera_pos, v3s16 block_pos);
 	//void consolidateTransparentBuffers();
 
-	/// get the list of transparent buffers
+    // get the list of transparent buffers
 	/*const std::vector<PartialMeshBuffer> &getTransparentBuffers() const
 	{
 		return this->m_transparent_buffers;

@@ -14,15 +14,17 @@ public:
 
 	~COpenGL3VertexBuffer();
 
-	void uploadVertexData(u32 vertexCount, const void *data) override;
-
-	void uploadIndexData(u32 indexCount, const void *data) override;
+    void uploadData(u32 vertexCount, const void *vertexData,
+		u32 indexCount, const void *indexData) override;
 
 	void bind() const override;
 
 	void unbind() const override;
 
-	void draw(video::IVideoDriver *driver, const video::SMaterial &last_material) const override;
+    void setAttributes() override;
+
+	void draw(video::IVideoDriver *driver, const video::SMaterial &last_material,
+        scene::E_PRIMITIVE_TYPE primitive_type = scene::EPT_TRIANGLES) const override;
 };
 
 } // end namespace scene

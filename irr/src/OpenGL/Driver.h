@@ -342,7 +342,7 @@ protected:
 	void drawElements(GLenum primitiveType, const VertexType &vertexType, uintptr_t vertices, uintptr_t indices, int indexCount);
 
     void setVertexAttributes(const VertexType &vertexType, uintptr_t verticesBase);
-    void setVBOAttributes(const VertexType &vertexType);
+    //void setVBOAttributes(const VertexType &vertexType);
     void unsetVertexAttributes(const VertexType &vertexType);
 
 	COpenGL3CacheHandler *CacheHandler;

@@ -34,7 +34,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <IVertexBuffer.h>
 #include "octree.h"
 
-class MeshStorage;
+class MeshLevel;
 class Client;
 class ITextureSource;
 
@@ -81,6 +81,9 @@ public:
 	MapSector * emergeSector(v2s16 p) override;
 
 	MapBlock * emergeBlock(v3s16 p, bool create_blank=true) override;
+
+	void pushDeletedBlocks(const std::vector<v3s16> &deleted_blocks);
+
 	/*
 		ISceneNode methods
 	*/
@@ -90,7 +93,7 @@ public:
 	virtual void render() override
 	{
 		video::IVideoDriver* driver = SceneManager->getVideoDriver();
-		rebuildVBOs(driver);
+        rebuildBuffers(driver);
 
 		driver->setTransform(video::ETS_WORLD, AbsoluteTransformation);
 		renderMap(driver, SceneManager->getSceneNodeRenderPass());
@@ -101,13 +104,13 @@ public:
 		return m_box;
 	}
 
-	void rebuildOctree();
+	void updateOctrees();
 	void frustumCull();
 	// @brief Calculate statistics about the map and keep the blocks alive
-	void updateDrawBuffers();
+    void updateStorages();
     void updateLighting();
 	void touchMapBlocks();
-	void rebuildVBOs(video::IVideoDriver* driver);
+    void rebuildBuffers(video::IVideoDriver* driver);
 	void updateDrawListShadow(v3f shadow_light_pos, v3f shadow_light_dir, float radius, float length);
 
 	void renderMap(video::IVideoDriver* driver, s32 pass);
@@ -126,7 +129,7 @@ public:
 	f32 getWantedRange() const { return m_control.wanted_range; }
 	f32 getCameraFov() const { return m_camera_fov; }
 
-    MeshStorage &getMeshStorage() { return m_mesh_storage; }
+    //MeshStorage &getMeshStorage() { return m_mesh_storage; }
 
 protected:
 	// use drop() instead
@@ -138,24 +141,6 @@ private:
 
 	// update the vertex order in transparent mesh buffers
 	//void updateTransparentMeshBuffers();
-
-
-	// Orders blocks by distance to the camera
-	class MapBlockComparer
-	{
-	public:
-		MapBlockComparer(const v3s16 &camera_bpos) : m_camera_bpos(camera_bpos) {}
-
-		bool operator() (const v3s16 &left, const v3s16 &right) const
-		{
-			auto distance_left = left.getDistanceFromSQ(m_camera_bpos);
-			auto distance_right = right.getDistanceFromSQ(m_camera_bpos);
-			return distance_left > distance_right || (distance_left == distance_right && left > right);
-		}
-
-	private:
-		v3s16 m_camera_bpos;
-	};
 
 	// reference to a mesh buffer used when rendering the map.
 	/*struct DrawBuffer {
@@ -199,21 +184,29 @@ private:
 
 	//std::map<v3s16, MapBlock*> m_drawlist_shadow;
 
-	std::atomic<bool> m_needs_rebuild_octree;
+	//std::atomic<bool> m_needs_rebuild_octree;
 	std::atomic<bool> m_needs_frustum_cull_blocks;
 	std::atomic<bool> m_needs_update_transparent_meshes;
+	std::atomic<bool> m_storages_updated = false;
 
 	UpdateClientMapThread *m_clientmap_thread = nullptr;
 
 	f32 m_last_daynight_ratio;
 
-	Octree m_octree;
-	std::map<v3s16, MapBlock *, MapBlockComparer> m_sorted_mapblocks;
+	// Grid-aligned multi-level octrees (8x8x8 mapblocks size) which the whole loaded map is split into
+	std::map<v3s16, Octree *> m_octrees;	// positions in octree boxes
+	std::list<MapBlock *> m_new_mapblocks;
+	std::list<v3s16> m_delete_mapblocks;
 
-	MeshStorage m_mesh_storage;
+    std::map<v3f, OctreeNode *, PositionComparer> m_levels;		// in nodes
+    std::list<MeshStorage *> m_render_storages;
+    std::mutex m_storages_mutex;
 
-	std::list<std::pair<video::SMaterial, std::list<scene::IVertexBuffer *>>> m_solid_vbos;
-	std::vector<std::pair<video::SMaterial, scene::IVertexBuffer *>> m_transparent_vbos;
+	//MeshStorage m_mesh_storage;
+
+    //using OctreeNodeBuffers = std::list<std::pair<video::SMaterial, std::list<scene::IVertexBuffer *>>>;
+    //std::list<OctreeNodeBuffers> m_buffers;
+	//std::vector<std::pair<video::SMaterial, scene::IVertexBuffer *>> m_transparent_vbos;
 
 
 	//std::unordered_map<u32, std::vector<u32>> m_visible_buffers;
@@ -243,13 +236,13 @@ public:
 
 		while (!stopRequested()) {
 			//infostream << "rebuildOctree()" << std::endl;
-			m_map->rebuildOctree();
+            m_map->updateOctrees();
 			//infostream << "frustumCull()" << std::endl;
 			m_map->frustumCull();
 			//infostream << "updateLightAndTimers()" << std::endl;
             m_map->updateLighting();
 			//infostream << "updateDrawBuffers()" << std::endl;
-			m_map->updateDrawBuffers();
+            m_map->updateStorages();
 			//infostream << "touchMapBlocks()" << std::endl;
 			m_map->touchMapBlocks();
 			//infostream << "UpdateClientMapThread sleep 50 ms..." << std::endl;

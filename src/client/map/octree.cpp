@@ -15,151 +15,98 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "octree.h"
-#include "clientmap.h"
+#include <cassert>
+#include <cmath>
 
 void OctreeNode::splitNode()
 {
 	//infostream << "splitNode() mapblocks count: " << m_mapblocks.size() << std::endl;
-	if (m_mapblocks.size() <= 1)
+
+	if (m_size <= 1)
 		return;
 
-	v3s16 dims = m_bounding_box.MaxEdge - m_bounding_box.MinEdge + v3s16(1, 1, 1);
-
-	if (dims.X <= MAP_BLOCKSIZE || dims.Y <= MAP_BLOCKSIZE || dims.Z <= MAP_BLOCKSIZE)
-		return;
-
-	v3s16 centre = m_bounding_box.MinEdge + dims / 2;
+	s16 cur_size = m_size >> 1;
 
 	std::array<core::aabbox3d<s16>, 8> oct_boxes;
 
-	oct_boxes[0] = core::aabbox3d<s16>(m_bounding_box.MinEdge, centre - v3s16(1, 1, 1));
+	oct_boxes[0] = core::aabbox3d<s16>(
+		m_bounding_box.MinEdge, m_bounding_box.MinEdge + (cur_size - 1));
 	oct_boxes[1] = core::aabbox3d<s16>(
-		v3s16(oct_boxes[0].MinEdge.X, oct_boxes[0].MinEdge.Y, centre.Z),
-		v3s16(oct_boxes[0].MaxEdge.X, oct_boxes[0].MaxEdge.Y, m_bounding_box.MaxEdge.Z)
-	);
+		oct_boxes[0].MinEdge + v3s16(0, 0, cur_size), oct_boxes[0].MaxEdge + v3s16(0, 0, cur_size));
 	oct_boxes[2] = core::aabbox3d<s16>(
-		v3s16(centre.X, oct_boxes[1].MinEdge.Y, oct_boxes[1].MinEdge.Z),
-		v3s16(m_bounding_box.MaxEdge.X, oct_boxes[1].MaxEdge.Y, oct_boxes[1].MaxEdge.Z)
-	);
+		oct_boxes[1].MinEdge + v3s16(cur_size, 0, 0), oct_boxes[1].MaxEdge + v3s16(cur_size, 0, 0));
 	oct_boxes[3] = core::aabbox3d<s16>(
-		v3s16(centre.X, oct_boxes[0].MinEdge.Y, oct_boxes[0].MinEdge.Z),
-		v3s16(m_bounding_box.MaxEdge.X, oct_boxes[0].MaxEdge.Y, oct_boxes[0].MaxEdge.Z)
-	);
+		oct_boxes[0].MinEdge + v3s16(cur_size, 0, 0), oct_boxes[0].MaxEdge + v3s16(cur_size, 0, 0));
 	oct_boxes[4] = core::aabbox3d<s16>(
-		v3s16(oct_boxes[0].MinEdge.X, centre.Y, oct_boxes[0].MinEdge.Z),
-		v3s16(oct_boxes[0].MaxEdge.X, m_bounding_box.MaxEdge.Y, oct_boxes[0].MaxEdge.Z)
-	);
+		oct_boxes[0].MinEdge + v3s16(0, cur_size, 0), oct_boxes[0].MaxEdge + v3s16(0, cur_size, 0));
 	oct_boxes[5] = core::aabbox3d<s16>(
-		v3s16(oct_boxes[4].MinEdge.X, oct_boxes[4].MinEdge.Y, centre.Z),
-		v3s16(oct_boxes[4].MaxEdge.X, oct_boxes[4].MaxEdge.Y, m_bounding_box.MaxEdge.Z)
-	);
+		oct_boxes[1].MinEdge + v3s16(0, cur_size, 0), oct_boxes[1].MaxEdge + v3s16(0, cur_size, 0));
 	oct_boxes[6] = core::aabbox3d<s16>(
-		v3s16(centre.X, oct_boxes[5].MinEdge.Y, oct_boxes[5].MinEdge.Z),
-		v3s16(m_bounding_box.MaxEdge.X, oct_boxes[5].MaxEdge.Y, oct_boxes[5].MaxEdge.Z)
-	);
+		oct_boxes[2].MinEdge + v3s16(0, cur_size, 0), oct_boxes[2].MaxEdge + v3s16(0, cur_size, 0));
 	oct_boxes[7] = core::aabbox3d<s16>(
-		v3s16(centre.X, oct_boxes[4].MinEdge.Y, oct_boxes[4].MinEdge.Z),
-		v3s16(m_bounding_box.MaxEdge.X, oct_boxes[4].MaxEdge.Y, oct_boxes[4].MaxEdge.Z)
-	);
-
-	std::array<std::vector<MapBlock *>, 8> oct_lists;
-	std::vector<u32> del_mapblocks_indices;
-
-	for (s32 k = m_mapblocks.size()-1; k >= 0; k--) {
-		core::aabbox3d<s16> box = m_mapblocks[k]->getBox();
-		for (u16 i = 0; i < 8; i++)
-			if (box.isFullInside(oct_boxes[i])) {
-				oct_lists[i].push_back(m_mapblocks[k]);
-				m_mapblocks.erase(m_mapblocks.begin() + k);
-			}
-	}
+		oct_boxes[3].MinEdge + v3s16(0, cur_size, 0), oct_boxes[3].MaxEdge + v3s16(0, cur_size, 0));
 
 	for (u16 i = 0; i < 8; i++) {
 		//infostream << "splitNode() new octree node i = " << i << std::endl;
-		m_child_nodes[i] = new OctreeNode(oct_lists[i], oct_boxes[i]);
-		m_child_nodes[i]->splitNode();
+        m_child_nodes[i] = new OctreeNode(oct_boxes[i], cur_size);
+        m_child_nodes[i]->splitNode();
 	}
 }
 
-
-void Octree::buildTree(std::unordered_map<v2s16, MapSector *> &sectors, v3s16 cam_pos_nodes, MapDrawControl &control)
+bool OctreeNode::traverseNodeForAdd(MapBlock *mp)
 {
+    core::aabbox3d<s16> box_nodes(
+        m_bounding_box.MinEdge * MAP_BLOCKSIZE,
+        m_bounding_box.MaxEdge * MAP_BLOCKSIZE + (MAP_BLOCKSIZE - 1)
+    );
+    auto box = mp->getBox();
+
+    if (!box.isFullInside(box_nodes))
+        return false;
+
+    need_rebuild = true;
+
+    for (auto next_node : m_child_nodes)
+        if (next_node)
+            if (next_node->traverseNodeForAdd(mp))
+                return false;
+
+    m_mapblock = std::make_pair(mp->getPos(), mp);
+
+    return true;
+}
+
+bool OctreeNode::traverseNodeForDelete(v3s16 pos)
+{
+    if (m_mapblock.first == pos) {
+        m_mapblock = std::make_pair(v3s16(0, 0, 0), nullptr);
+        return true;
+    }
+
+    need_rebuild = true;
+
+    for (auto next_node : m_child_nodes)
+        if (next_node)
+            if (next_node->traverseNodeForDelete(pos))
+                break;
+
+    return false;
+}
+
+
+void Octree::buildTree(v3s16 corner_pos_blocks, s16 size, MapDrawControl &control)
+{
+	assert(std::pow(2, std::log2(size)) == size); // the size should be the power of two
+
 	// Clears all childs formed in the previous tree building
 	clearTree();
 
-	v3s16 blocks_min{0, 0, 0};
-	v3s16 blocks_max{0, 0, 0};
+	//g_profiler->avg("MapBlock meshes in octree [#]", blocks_in_octree);
+	//g_profiler->avg("MapBlocks loaded [#]", blocks_loaded);
 
-	// Number of blocks currently loaded by the client
-	u32 blocks_loaded = 0;
-	// Number of blocks with mesh caught by the tree
-	u32 blocks_in_octree = 0;
-
-	/*
-	 * Calculates the min and max edges of the bounding box in nodes
-	 */
-
-	// If the limited viewing range is enabled, just gets two edge positions relatively to the camera one
-	if (!control.range_all) {
-		v3s16 box_nodes_d = v3s16(1, 1, 1) * control.wanted_range;
-
-		blocks_min = getContainerPos(cam_pos_nodes - box_nodes_d, MAP_BLOCKSIZE);
-		blocks_max = getContainerPos(cam_pos_nodes + box_nodes_d, MAP_BLOCKSIZE);
-	}
-
-	/*
-	 * Collects all mapblocks within the calculated area
-	 */
-	std::vector<MapBlock *> mapblocks;
-
-	for (auto &sector : sectors) {
-		blocks_loaded += sector.second->size();
-
-		MapBlockVect blocks_vect;
-		sector.second->getBlocks(blocks_vect);
-
-		for (auto &block : blocks_vect) {
-			if (!block)
-				continue;
-
-			v3s16 block_pos = block->getPos();
-
-			if (control.range_all) {
-				blocks_min.X = std::min(block_pos.X, blocks_min.X);
-				blocks_min.Y = std::min(block_pos.Y, blocks_min.Y);
-				blocks_min.Z = std::min(block_pos.Z, blocks_min.Z);
-
-				blocks_max.X = std::max(block_pos.X, blocks_max.X);
-				blocks_max.Y = std::max(block_pos.Y, blocks_max.Y);
-				blocks_max.Z = std::max(block_pos.Z, blocks_max.Z);
-			}
-
-			if (block->mesh) {
-				if (!control.range_all) {
-					if (blocks_min <= block_pos && block_pos <= blocks_max) {
-						mapblocks.push_back(block);
-						blocks_in_octree++;
-					}
-				}
-				else {
-					mapblocks.push_back(block);
-					blocks_in_octree++;
-				}
-
-			}
-		}
-	}
-
-	//infostream << "buildTree() blocks_loaded = " << blocks_loaded << std::endl;
-	//infostream << "buildTree() blocks_in_octree = " << blocks_in_octree << std::endl;
-	g_profiler->avg("MapBlock meshes in octree [#]", blocks_in_octree);
-	g_profiler->avg("MapBlocks loaded [#]", blocks_loaded);
-
-	core::aabbox3d<s16> box(
-		blocks_min * MAP_BLOCKSIZE, blocks_max * MAP_BLOCKSIZE + v3s16(1, 1, 1) * (MAP_BLOCKSIZE-1));
-
-	m_root_node = new OctreeNode(mapblocks, box);
+    m_root_node = new OctreeNode(
+		core::aabbox3d<s16>(corner_pos_blocks, corner_pos_blocks + (size - 1)), size);
 
 	// Starts recursively splitting the nodes until leafs don`t have one mapblock
-	m_root_node->splitNode();
+    m_root_node->splitNode();
 }

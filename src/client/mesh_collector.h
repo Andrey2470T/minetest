@@ -24,14 +24,17 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/tile.h"
 
 class Client;
+class TextureAtlas;
+class IWritableShaderSource;
+class ITextureSource;
 
 // Map of indices to layers and indices of arrays pairs inside that layer
 //using MeshRef = std::unordered_map<u32, u32>;
 
-class TriangleComparer
+class PositionComparer
 {
 public:
-	TriangleComparer(const v3f &camera_pos) : m_camera_pos(camera_pos) {}
+    PositionComparer(const v3f &camera_pos) : m_camera_pos(camera_pos) {}
 
 	bool operator() (const v3f &pos1, const v3f &pos2) const
 	{
@@ -68,13 +71,14 @@ struct MeshInfo
 	v3f offset;
 	v3f translation;
 
-    std::map<v3f, MeshTriangle, TriangleComparer> transparent_triangles;
+    //std::map<v3f, MeshTriangle, TriangleComparer> transparent_triangles;
 	// Map specific layers to specific vertex arrays which the given mesh has
 	//MeshRef layers_to_arrays_map;
 
     MeshInfo(v3f _center_pos, v3f _offset, v3f _translation)
-        : center_pos(_center_pos), offset(_offset), translation(_translation),
-        transparent_triangles{TriangleComparer(v3f(0.0f))} {}
+        : center_pos(_center_pos), offset(_offset), translation(_translation)
+    {}
+        //transparent_triangles{TriangleComparer(v3f(0.0f))} {}
 };
 
 struct MeshPart
@@ -100,9 +104,14 @@ public:
 	MeshInfo info;
 	std::vector<std::pair<video::SMaterial, MeshPart>> layers;
 
+	TextureAtlas *atlas;
+	IWritableShaderSource *shdrsrc;
+	ITextureSource *tsrc;
+
+	video::SMaterial temp_material;
+
     MapblockMeshCollector(Client *_client, v3f _center_pos,
-			v3f _offset, v3f _translation)
-		: client(_client), info(_center_pos, _offset, _translation) {}
+			v3f _offset, v3f _translation);
 
     void addTileMesh(const TileSpec &tile,
 		const video::S3DVertex *vertices, u32 numVertices,

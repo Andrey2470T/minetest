@@ -209,10 +209,8 @@ public:
 
 	inline void addArmInertia(f32 player_yaw);
 
+	std::array<core::plane3d<f32>, 6> getFrustumCullPlanes() const;
 private:
-	// Use getFrustumCuller().
-	// This helper just exists to decrease the header's number of includes.
-	std::array<core::plane3d<f32>, 5> getFrustumCullPlanes() const;
 
 	// Nodes
 	scene::ISceneNode *m_playernode = nullptr;

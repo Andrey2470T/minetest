@@ -385,7 +385,7 @@ public:
 		LockLayer = 0;
 	}
 
-	void regenerateMipMapLevels(void *data = 0, u32 layer = 0, int end_size = 1) override
+    void regenerateMipMapLevels(void *data = 0, u32 layer = 0, u32 end_size = 1) override
 	{
 		if (!HasMipMaps || LegacyAutoGenerateMipMaps || (Size.Width * Size.Height <= end_size))
 			return;

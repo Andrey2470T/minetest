@@ -34,7 +34,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <cmath>
 #include "client/texturesource.h"
 #include "clientmap.h"
-#include "mesh_storage.h"
 #include "client/light_colors.h"
 #include "log.h"
 #include "util/timetaker.h"
@@ -593,6 +592,7 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data, v3s16 camera_offs
 
 	MapblockMeshCollector *mesh = new MapblockMeshCollector(client,
 		bounding_sphere_center, offset, translation);
+	//infostream << "Mapblock Mesh Generation time: " << mapblock_meshgen.getTimerTime() << "us" << std::endl;
 
 	/*
 		Add special graphics:
@@ -602,11 +602,13 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data, v3s16 camera_offs
 		- whatever
 	*/
 
-	MapblockMeshGenerator(data, mesh,
-		client->getSceneManager()->getMeshManipulator()).generate();
+	{
+		MapblockMeshGenerator(data, mesh,
+			client->getSceneManager()->getMeshManipulator()).generate();
+	}
 	//infostream << "MapblockMeshGenerator::generate() took " << mapblock_meshgen.getTimerTime() << "us" << std::endl;
 
-	mesh->info.bounding_radius = std::sqrt(mesh->info.bounding_radius_sq);
+    //mesh->info.bounding_radius = std::sqrt(mesh->info.bounding_radius_sq);
 
 	//m_storage->addArrays(collector);
 

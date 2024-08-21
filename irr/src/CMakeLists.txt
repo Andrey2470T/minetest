@@ -379,6 +379,7 @@ if(ENABLE_OPENGL3 OR ENABLE_GLES2)
 		OpenGL/MaterialRenderer.cpp
 		OpenGL/Renderer2D.cpp
 		OpenGL/VertexBuffer.cpp
+		OpenGL/VertexType.cpp
 	)
 endif()
 

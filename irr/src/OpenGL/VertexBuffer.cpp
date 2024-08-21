@@ -1,4 +1,5 @@
 #include "OpenGL/VertexBuffer.h"
+#include "OpenGL/VertexType.h"
 #include "mt_opengl.h"
 #include "vendor/gl.h"
 
@@ -7,72 +8,100 @@ namespace irr
 namespace scene
 {
 
+GLenum to_gl_usage(E_HARDWARE_MAPPING mapping)
+{
+	GLenum usage = GL_STATIC_DRAW;
+	if (mapping == scene::EHM_STREAM)
+		usage = GL_STREAM_DRAW;
+	else if (mapping == scene::EHM_DYNAMIC)
+		usage = GL_DYNAMIC_DRAW;
+
+	return usage;
+}
+
 COpenGL3VertexBuffer::COpenGL3VertexBuffer()
 	: IVertexBuffer()
 {
+	GL.GenVertexArrays(1, &VertexArrayId);
 	GL.GenBuffers(1, &VertexBufferId);
-	GL.GenBuffers(1, &IndexBufferId);
-
-	PrimitiveType = scene::EPT_TRIANGLES;
 }
 
 COpenGL3VertexBuffer::~COpenGL3VertexBuffer()
 {
+	GL.DeleteVertexArrays(1, &VertexArrayId);
 	GL.DeleteBuffers(1, &VertexBufferId);
-	GL.DeleteBuffers(1, &IndexBufferId);
+
+	if (IndexBufferId != 0)
+		GL.DeleteBuffers(1, &IndexBufferId);
 }
 
-void COpenGL3VertexBuffer::uploadVertexData(u32 vertexCount, const void *data)
+void COpenGL3VertexBuffer::uploadData(u32 vertexCount, const void *vertexData,
+	u32 indexCount, const void *indexData)
 {
+	if (vertexCount == 0 || vertexData == nullptr) {
+		os::Printer::log("Failed to upload the data in the vertex buffer (no vertices provided)");
+		return;
+	}
+
+	GL.BindVertexArray(VertexArrayId);
+
 	VertexCount = vertexCount;
 
 	GL.BindBuffer(GL_ARRAY_BUFFER, VertexBufferId);
 
-	size_t bufferSize = VertexCount * getVertexPitchFromType(VertexType);
+    size_t bufferSize = VertexCount * video::getVertexPitchFromType(VertexType);
 
-	GLenum usage = GL_STATIC_DRAW;
-	if (MappingHint_Vertex == scene::EHM_STREAM)
-		usage = GL_STREAM_DRAW;
-	else if (MappingHint_Vertex == scene::EHM_DYNAMIC)
-		usage = GL_DYNAMIC_DRAW;
+	GL.BufferData(GL_ARRAY_BUFFER, bufferSize, vertexData, to_gl_usage(MappingHint_Vertex));
 
-	GL.BufferData(GL_ARRAY_BUFFER, bufferSize, data, usage);
+	if (indexCount > 0 && indexData != nullptr) {
+		if (IndexBufferId == 0)
+			GL.GenBuffers(1, &IndexBufferId);
 
-	GL.BindBuffer(GL_ARRAY_BUFFER, 0);
-}
+		IndexCount = indexCount;
 
-void COpenGL3VertexBuffer::uploadIndexData(u32 indexCount, const void *data)
-{
-	IndexCount = indexCount;
+		GL.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, IndexBufferId);
 
-	GL.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, IndexBufferId);
+        bufferSize = IndexCount * video::getIndexPitchFromType(IndexType);
 
-	size_t bufferSize = IndexCount * getIndexPitchFromType(IndexType);
+		GL.BufferData(GL_ELEMENT_ARRAY_BUFFER, bufferSize, indexData, to_gl_usage(MappingHint_Index));
+	}
 
-	GLenum usage = GL_STATIC_DRAW;
-	if (MappingHint_Index == scene::EHM_STREAM)
-		usage = GL_STREAM_DRAW;
-	else if (MappingHint_Index == scene::EHM_DYNAMIC)
-		usage = GL_DYNAMIC_DRAW;
+    setAttributes();
 
-	GL.BufferData(GL_ELEMENT_ARRAY_BUFFER, bufferSize, data, usage);
-
-	GL.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	GL.BindVertexArray(0);
 }
 
 void COpenGL3VertexBuffer::bind() const
 {
-	GL.BindBuffer(GL_ARRAY_BUFFER, VertexBufferId);
-	GL.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, IndexBufferId);
+	GL.BindVertexArray(VertexArrayId);
 }
 
 void COpenGL3VertexBuffer::unbind() const
 {
-	GL.BindBuffer(GL_ARRAY_BUFFER, 0);
-	GL.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	GL.BindVertexArray(0);
 }
 
-void COpenGL3VertexBuffer::draw(video::IVideoDriver *driver, const video::SMaterial &last_material) const
+void COpenGL3VertexBuffer::setAttributes()
+{
+    auto &vertexAttribs = video::getVertexTypeDescription(VertexType);
+    for (auto &attr : vertexAttribs.Attributes) {
+		GL.EnableVertexAttribArray(attr.Index);
+		switch (attr.mode) {
+        case video::VertexAttribute::Mode::Regular:
+            GL.VertexAttribPointer(attr.Index, attr.ComponentCount, (GLenum)attr.ComponentType, GL_FALSE, vertexAttribs.VertexSize, (void*)attr.Offset);
+			break;
+        case video::VertexAttribute::Mode::Normalized:
+            GL.VertexAttribPointer(attr.Index, attr.ComponentCount, (GLenum)attr.ComponentType, GL_TRUE, vertexAttribs.VertexSize, (void*)attr.Offset);
+			break;
+        case video::VertexAttribute::Mode::Integral:
+            GL.VertexAttribIPointer(attr.Index, attr.ComponentCount, (GLenum)attr.ComponentType, vertexAttribs.VertexSize, (void*)attr.Offset);
+			break;
+		}
+	}
+}
+
+void COpenGL3VertexBuffer::draw(video::IVideoDriver *driver, const video::SMaterial &last_material,
+	scene::E_PRIMITIVE_TYPE primitive_type) const
 {
 	GLenum indexSize = 0;
 
@@ -83,22 +112,13 @@ void COpenGL3VertexBuffer::draw(video::IVideoDriver *driver, const video::SMater
 	}
     case (video::EIT_32BIT): {
 		indexSize = GL_UNSIGNED_INT;
-//#ifdef GL_OES_element_index_uint
-//#ifndef GL_UNSIGNED_INT
-//#define GL_UNSIGNED_INT 0x1405
-//#endif
-		//if (driver->queryDriverFeature(COGLESCoreExtensionHandler::IRR_GL_OES_element_index_uint))
-		//	indexSize = GL_UNSIGNED_INT;
-		//else
-//#endif
-		//	indexSize = GL_UNSIGNED_SHORT;
 		break;
 	}
 	}
 
-	u32 primitiveCount = getPrimitiveCount();
+	u32 primitiveCount = getPrimitiveCount(primitive_type);
 
-	switch (PrimitiveType) {
+	switch (primitive_type) {
 	case scene::EPT_POINTS:
 	case scene::EPT_POINT_SPRITES:
 		GL.DrawArrays(GL_POINTS, 0, primitiveCount);

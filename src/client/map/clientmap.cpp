@@ -27,6 +27,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "util/basic_macros.h"
 #include "client/renderingengine.h"
 #include "client/light_colors.h"
+#include "threading/mutex_auto_lock.h"
+#include "mesh_storage.h"
 #include "log.h"
 
 #include <queue>
@@ -45,8 +47,9 @@ ClientMap::ClientMap(
 	m_client(client),
 	m_rendering_engine(rendering_engine),
 	m_control(control),
-	m_sorted_mapblocks(MapBlockComparer(v3s16(0,0,0))),
-    m_mesh_storage(client)
+    m_levels(PositionComparer(v3f()))//,
+	//m_sorted_mapblocks(MapBlockComparer(v3s16(0,0,0))),
+    //m_mesh_storage(client)
 {
 	/*
 	 * @Liso: Sadly C++ doesn't have introspection, so the only way we have to know
@@ -91,14 +94,14 @@ ClientMap::~ClientMap()
 
 	delete m_clientmap_thread;
 
-    for (auto &vbos_layer : m_solid_vbos)
+    /*for (auto &vbos_layer : m_solid_vbos)
         for (auto buffer : vbos_layer.second)
             if (buffer)
                 delete buffer;
 
     for (auto &vbo_layer : m_transparent_vbos)
         if (vbo_layer.second)
-            delete vbo_layer.second;
+            delete vbo_layer.second;*/
 	//g_settings->deregisterChangedCallback("occlusion_culler", on_settings_changed, this);
 	//g_settings->deregisterChangedCallback("enable_raytraced_culling", on_settings_changed, this);
 }
@@ -121,39 +124,34 @@ void ClientMap::updateCamera(v3f pos, v3f dir, f32 fov, v3s16 offset, video::SCo
 	v3s16 current_block = getContainerPos(current_node, MAP_BLOCKSIZE);
 
 	bool cam_block_changed = previous_block != current_block;
+	bool cam_dir_changed = m_camera_direction_change.getLengthSQ() >= 0.04f;
 	bool wanted_range_changed = m_control.wanted_range != m_last_wanted_range && !m_control.range_all;
-	bool range_all_enabled = m_control.range_all && !m_was_range_all;
-	bool range_all_disabled = !m_control.range_all && m_was_range_all;
+	bool range_all_changed = m_control.range_all != m_was_range_all;
 
 	//infostream << "updateCamera() 1" << std::endl;
-	if (cam_block_changed || wanted_range_changed || range_all_enabled || range_all_disabled || !m_octree.isBuilt()) {
+	if (cam_block_changed || cam_dir_changed || wanted_range_changed || range_all_changed) {
 		//infostream << "updateCamera() 2" << std::endl;
 		//infostream << "rebuilding octree" << std::endl;
-		m_needs_rebuild_octree = true;
+		//m_needs_rebuild_octree = true;
 		m_needs_frustum_cull_blocks = true;
+		m_needs_update_transparent_meshes = true;
 		//infostream << "updateCamera() 3" << std::endl;
 
+		if (cam_dir_changed)
+			m_camera_direction_change = v3f(0.0f);
 		if (wanted_range_changed)
 			m_last_wanted_range = m_control.wanted_range;
 
-		if (range_all_enabled || range_all_disabled)
+		if (range_all_changed)
 			m_was_range_all = m_control.range_all;
 	}
 
-	// If the camera has rotated at this magnitude, do a new culling
-	if (m_camera_direction_change.getLengthSQ() >= 0.04f) {
-		//infostream << "updateCamera() 4" << std::endl;
-		m_needs_frustum_cull_blocks = true;
-		m_camera_direction_change = v3f(0.0f);
-		//infostream << "updateCamera() 5" << std::endl;
-	}
-
 	// reorder transparent meshes when camera crosses node boundary
-	if (previous_node != current_node || m_needs_frustum_cull_blocks) {
+	//if (previous_node != current_node || m_needs_frustum_cull_blocks) {
 		//infostream << "updateCamera() 6" << std::endl;
-		m_needs_update_transparent_meshes = true;
+	//	m_needs_update_transparent_meshes = true;
 		//infostream << "updateCamera() 7" << std::endl;
-	}
+	//}
 
 	//updatecamera_time.stop(true);
 }
@@ -180,17 +178,25 @@ MapBlock * ClientMap::emergeBlock(v3s16 p, bool create_blank)
 
 	if (!block && create_blank) {
 		block = sector->createBlankBlock(p.Y);
-		m_needs_rebuild_octree = true;
+
+		m_new_mapblocks.push_back(block);
 		m_needs_frustum_cull_blocks = true;
-		m_needs_update_transparent_meshes = true;
 	}
 
 	return block;
 }
 
+void ClientMap::pushDeletedBlocks(const std::vector<v3s16> &deleted_blocks)
+{
+	for (auto &del_block_p : deleted_blocks)
+		m_delete_mapblocks.push_back(del_block_p);
+
+	m_needs_frustum_cull_blocks = true;
+}
+
 void ClientMap::OnRegisterSceneNode()
 {
-	if(IsVisible)
+	if (IsVisible)
 	{
 		SceneManager->registerNodeForRendering(this, scene::ESNRP_SOLID);
 		SceneManager->registerNodeForRendering(this, scene::ESNRP_TRANSPARENT);
@@ -201,7 +207,209 @@ void ClientMap::OnRegisterSceneNode()
 	// we have other way to find it
 }
 
-void ClientMap::rebuildOctree()
+void ClientMap::updateOctrees()
+{
+	//infostream << "updateOctrees() m_new_mapblocks count: " << m_new_mapblocks.size() << std::endl;
+	TimeTaker update_octrees_time("Update octrees", nullptr, PRECISION_MICRO);
+	ScopeProfiler sp(g_profiler, "CM::updateOctrees()", SPT_AVG);
+
+	for (; !m_new_mapblocks.empty(); m_new_mapblocks.pop_front()) {
+		MapBlock *cur_mp = m_new_mapblocks.front();
+
+		v3s16 new_mp_pos = cur_mp->getPos();
+		//infostream << "updateOctrees() new mapblock pos: " << new_mp_pos.X << ", " << new_mp_pos.Y << ", " << new_mp_pos.Z << std::endl;
+		v3s16 oct_pos = getContainerPos(cur_mp->getPos(), OCTREE_SIZE);
+		//infostream << "updateOctrees() octree pos for this mapblock: " << oct_pos.X << ", " << oct_pos.Y << ", " << oct_pos.Z << std::endl;
+		auto oct_it = m_octrees.find(oct_pos);
+
+		Octree *oct = nullptr;
+
+		if (oct_it == m_octrees.end()) {
+			oct = new Octree();
+            oct->buildTree(oct_pos * OCTREE_SIZE, OCTREE_SIZE, m_control);
+            m_octrees.emplace(oct_pos, oct);
+		}
+		else
+			oct = oct_it->second;
+
+        oct->traverseTreeForAdd(cur_mp);
+	}
+
+	//infostream << "updateOctrees() m_delete_mapblocks count: " << m_new_mapblocks.size() << std::endl;
+	for (; !m_delete_mapblocks.empty(); m_delete_mapblocks.pop_front()) {
+		v3s16 cur_mp_pos = m_delete_mapblocks.front();
+
+		auto oct_it = m_octrees.find(getContainerPos(cur_mp_pos, OCTREE_SIZE));
+
+		if (oct_it != m_octrees.end())
+            oct_it->second->traverseTreeForDelete(cur_mp_pos);
+	}
+
+	update_octrees_time.stop(false);
+}
+
+void ClientMap::frustumCull()
+{
+	if (!m_needs_frustum_cull_blocks)
+		return;
+
+	infostream << "m_octree count: " << m_octrees.size() << std::endl;
+	ScopeProfiler sp(g_profiler, "CM::frustumCull()", SPT_AVG);
+
+    m_levels = std::map<v3f, OctreeNode *, PositionComparer>(m_camera_position);
+
+	// Number of blocks frustum culled
+	u32 blocks_frustum_culled = 0;
+
+	if (!m_client->getCamera()) {
+        return;
+    }
+
+    auto frustum_planes = m_client->getCamera()->getFrustumCullPlanes();
+
+	TimeTaker frustum_culling_time("Frustum culling", nullptr, PRECISION_MICRO);
+
+	u32 octnodes_count = 0;
+	auto frustum_cull = [&] (const OctreeNode *node) {
+		octnodes_count++;
+
+		infostream << "frustumCull() current traversing node size: " << node->getSize() << std::endl;
+        v3f center = node->getCenter();
+        v3f pos_camspace = center - intToFloat(m_camera_offset, BS);
+
+        f32 radius = node->getRadius();
+
+        bool fully_inside_frustum = true;
+
+        s16 volume = node->getVolume();
+		for (auto &plane : frustum_planes) {
+            f32 dist = plane.getDistanceTo(pos_camspace);
+            // If true, the node is fully outside the frustum
+            if (dist >= radius) {
+                blocks_frustum_culled += volume;
+                return false;
+            }
+            // If true, the node is partially inside the frustum
+            else if (std::fabs(dist) < radius) {
+                fully_inside_frustum = false;
+                break;
+            }
+		}
+
+        s16 size = node->getSize();
+        if (fully_inside_frustum || size == 1) {
+            m_levels.emplace(center, const_cast<OctreeNode *>(node));
+            return false;
+        }
+
+        return true;
+	};
+
+    for (auto &octree : m_octrees) {
+        octree.second->traverseTree(frustum_cull);
+		infostream << "frustumCull() count of traversed nodes of the octree: " << octnodes_count << std::endl;
+		octnodes_count = 0;
+	}
+
+    frustum_culling_time.stop(false);
+
+    g_profiler->avg("MapBlocks frustum culled [#]", blocks_frustum_culled);
+}
+
+void ClientMap::updateStorages()
+{
+    if (!m_needs_frustum_cull_blocks)
+        return;
+
+    m_needs_frustum_cull_blocks = false;
+	m_storages_updated = true;
+
+    std::list<std::pair<OctreeNode *, std::list<MeshLayer *>>> octnodes_layers;
+    std::list<MeshLayer *> octnode_layers;
+
+    auto merge_octnode_mesh = [&octnode_layers] (const OctreeNode *node) {
+        auto mesh = node->getMapblockMesh();
+
+        if (mesh) { // only octree leaves have mapblocks
+            for (std::pair<video::SMaterial, MeshPart> mp_layer : mesh->layers) {
+                auto layer_it = std::find_if(octnode_layers.begin(), octnode_layers.end(),
+                    [&mp_layer] (MeshLayer *layer)
+                    {
+                        return layer->material == mp_layer.first;
+                    }
+                );
+
+                if (layer_it == octnode_layers.end()) {
+                    octnode_layers.push_back(new MeshLayer(mp_layer.first));
+                    layer_it = std::prev(octnode_layers.end());
+                }
+
+                auto &last_part = (*layer_it)->merged_mesh.back();
+
+                auto &new_mesh = mp_layer.second;
+
+                if (last_part.vertices.size() + new_mesh.vertices.size() > 1e6) {
+                    (*layer_it)->merged_mesh.push_back(MeshPart());
+                    last_part = (*layer_it)->merged_mesh.back();
+                }
+
+                u32 vertex_count = last_part.vertices.size();
+
+                last_part.vertices.insert(last_part.vertices.end(), new_mesh.vertices.begin(), new_mesh.vertices.end());
+
+                for (auto &ind : new_mesh.indices)
+                    ind += vertex_count;
+
+                last_part.indices.insert(last_part.indices.end(), new_mesh.indices.begin(), new_mesh.indices.end());
+            }
+
+            return false;
+        }
+
+        return true;
+    };
+
+    for (auto &octnode : m_levels) {
+        OctreeNode *oct_n = octnode.second;
+
+        if (!oct_n->storage)
+            oct_n->storage = new MeshStorage(m_client);
+
+        if (oct_n->need_rebuild) {
+            oct_n->need_rebuild = false;
+            oct_n->traverseNode(merge_octnode_mesh);
+        }
+
+        octnodes_layers.emplace_back(oct_n, octnode_layers);
+
+        octnode_layers.clear();
+    }
+
+    MutexAutoLock storages_lock(m_storages_mutex);
+
+    m_render_storages.clear();
+
+    for (auto &node_layers : octnodes_layers) {
+        if (!node_layers.second.empty())
+            node_layers.first->storage->mergeNewLayers(node_layers.second);
+        m_render_storages.push_back(node_layers.first->storage);
+    }
+}
+
+void ClientMap::rebuildBuffers(video::IVideoDriver *driver)
+{
+	if (!m_storages_updated)
+		return;
+
+	m_storages_updated = false;
+
+    MutexAutoLock storage_lock(m_storages_mutex);
+
+    for (auto storage : m_render_storages)
+        storage->rebuildSolidBuffers(driver);
+}
+
+/*void ClientMap::rebuildOctree()
 {
 	if (!m_needs_rebuild_octree)
 		return;
@@ -213,9 +421,9 @@ void ClientMap::rebuildOctree()
 
 	m_needs_rebuild_octree = false;
 	octree_build_time.stop(false);
-}
+}*/
 
-void ClientMap::frustumCull()
+/*void ClientMap::frustumCull()
 {
 	if (!m_needs_frustum_cull_blocks)
 		return;
@@ -284,9 +492,9 @@ void ClientMap::frustumCull()
 	infostream << "Visible mapblocks count: " << m_sorted_mapblocks.size() << std::endl;
 	//infostream << "frustumCull() blocks_frustum_culled = " << blocks_frustum_culled << std::endl;
 	g_profiler->avg("MapBlocks frustum culled [#]", blocks_frustum_culled);
-}
+}*/
 
-void ClientMap::updateDrawBuffers()
+/*void ClientMap::updateDrawBuffers()
 {
 	//infostream << "updateDrawBuffers() 1" << std::endl;
 	//infostream << "updateDrawBuffers() visible meshes count: " << m_sorted_mapblocks.size() << std::endl;
@@ -346,10 +554,10 @@ void ClientMap::updateDrawBuffers()
 
 	m_needs_update_transparent_meshes = false;
 
-	updatebuffers_time.stop(true);
+	updatebuffers_time.stop(false);
 
 	g_profiler->avg("CM::Transparent Buffers - Sorted", sorted_blocks);
-}
+}*/
 
 void ClientMap::updateLighting()
 {
@@ -365,7 +573,12 @@ void ClientMap::updateLighting()
 	video::SColorf day_color;
 	get_sunlight_color(&day_color, daynight_ratio);
 
-	m_mesh_storage.updateLighting(day_color);
+	m_storages_updated = true;
+
+	MutexAutoLock storage_lock(m_storages_mutex);
+
+    for (auto storage : m_render_storages)
+		storage->updateLighting(day_color);
 
 	m_last_daynight_ratio = daynight_ratio;
 
@@ -374,20 +587,30 @@ void ClientMap::updateLighting()
 
 void ClientMap::touchMapBlocks()
 {
-	if (m_sorted_mapblocks.empty())
+	if (m_levels.empty())
 		return;
 
-	for (auto &p : m_sorted_mapblocks)
-		p.second->resetUsageTimer();
+	auto reset_timer = [] (const OctreeNode *node)
+	{
+		bool reset_result = node->resetMapblockTimer();
+
+		if (reset_result)
+			return false;
+
+		return true;
+	};
+
+	for (auto &octnode : m_levels)
+		octnode.second->traverseNode(reset_timer);
 }
 
-void ClientMap::rebuildVBOs(video::IVideoDriver* driver)
+/*void ClientMap::rebuildVBOs(video::IVideoDriver* driver)
 {
 	//TimeTaker rebuild_vbos_time("Rebuilding VBOs", nullptr, PRECISION_MICRO);
 	m_mesh_storage.rebuildSolidVBOs(driver, m_solid_vbos);
 	//m_mesh_storage.rebuildTransparentVBOs(driver, m_transparent_vbos);
 	//rebuild_vbos_time.stop(false);
-}
+}*/
 
 void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 {
@@ -408,18 +631,8 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 	driver->setTransform(video::ETS_WORLD, m);
 
 	if (pass == scene::ESNRP_SOLID)
-		for (auto &layer_vbos : m_solid_vbos) {
-			video::SMaterial mat_copy(layer_vbos.first);
-			mat_copy.Wireframe = m_control.show_wireframe;
-
-			driver->setMaterial(mat_copy);
-
-			for (auto buffer : layer_vbos.second) {
-				driver->drawVertexBuffer(buffer);
-
-				drawcall_count++;
-			}
-		}
+        for (auto storage : m_render_storages)
+            storage->renderBuffers(driver, m_control.show_wireframe, drawcall_count);
 
 	//infostream << "renderMap() solid materials count: " << materials_count << std::endl;
 	//infostream << "renderMap() drawcall_count = " << drawcall_count << std::endl;
