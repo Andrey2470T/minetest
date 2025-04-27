@@ -16,7 +16,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
-#include "irrlichttypes_extrabloated.h"
+#include "irrlichttypes_bloated.h"
 #include <IVideoDriver.h>
 #include <memory>
 #include <map>
@@ -31,12 +31,12 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 /*!
  * Animation parameters for an atlas tile catching from TileLayer
  */
-struct AnimationInfo
+struct TileAnimationInfo
 {
 	u16 frame_length_ms = 0;
 	u16 frame_count = 0;
 
-	std::vector<video::ITexture*> frames;
+    std::vector<video::IImage*> frames;
 
 	u16 cur_frame = 0;
 	u16 frame_offset = 0;
@@ -53,9 +53,9 @@ struct TileInfo
 
 	int width, height;
 
-	video::ITexture *tex;
+    video::IImage *img;
 
-	AnimationInfo anim;
+    TileAnimationInfo anim;
 
 	TileInfo() = default;
 
@@ -67,7 +67,7 @@ struct TileInfo
 
 	bool operator==(const TileInfo &other_info)
 	{
-		return tex == other_info.tex;
+        return img == other_info.img;
 	}
 };
 
@@ -182,10 +182,10 @@ public:
 	}
 
 	/*!
-	 * Generates a new more extended texture for some atlas tile.
+     * Generates a new more extended image for some atlas tile.
 	 * The extension happens due to the adding the pixel frame.
 	 */
-	video::ITexture *recreateTextureForFiltering(video::ITexture *tex, u32 ext_thickness);
+    video::IImage *recreateImageForFiltering(video::IImage *img, u32 ext_thickness);
 
 	/*!
 	 * Packs all collected unique tiles within the atlas area.

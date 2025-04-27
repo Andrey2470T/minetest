@@ -14,6 +14,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+#include "IAttributes.h"
+#include "ISceneManager.h"
 #include "client/client.h"
 #include "client/texture_atlas.h"
 #include "settings.h"
@@ -24,12 +26,12 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 TileInfo::TileInfo(const TileLayer &layer)
 {
 	if (layer.animation_frame_count > 1)
-		tex = (*layer.frames)[0].texture;
+        img = (*layer.frames)[0].image;
 	else
-		tex = layer.texture;
+        img = layer.image;
 
-	if (tex) {
-		core::dimension2du size = tex->getSize();
+    if (img) {
+        core::dimension2du size = img->getDimension();
 		width = size.Width;
 		height = size.Height;
 	}
@@ -39,7 +41,7 @@ TileInfo::TileInfo(const TileLayer &layer)
 		anim.frame_count = layer.animation_frame_count;
 
 		for (auto &frame : *layer.frames)
-			anim.frames.push_back(frame.texture);
+            anim.frames.push_back(frame.image);
 	}
 }
 
@@ -61,11 +63,11 @@ TextureAtlas::TextureAtlas(Client *client, u32 atlas_area, u32 max_mip_level, u3
 		for (auto &info_i : m_tiles_infos_refs) {
 			TileInfo &info = m_builder->getTileInfo(info_i);
 
-			if (info.tex)
-				info.tex = recreateTextureForFiltering(info.tex, tile_frame_thickness);
+            if (info.img)
+                info.img = recreateImageForFiltering(info.img, tile_frame_thickness);
 
 			for (u16 frame_i = 0; frame_i < info.anim.frames.size(); frame_i++)
-				info.anim.frames[frame_i] = recreateTextureForFiltering(info.anim.frames[frame_i], tile_frame_thickness);
+                info.anim.frames[frame_i] = recreateImageForFiltering(info.anim.frames[frame_i], tile_frame_thickness);
 		}
 	}
 
@@ -76,7 +78,7 @@ TextureAtlas::TextureAtlas(Client *client, u32 atlas_area, u32 max_mip_level, u3
 	core::dimension2du atlas_size(atlas_side*2, atlas_side);
 	video::ECOLOR_FORMAT atlas_format = video::ECF_A32B32G32R32F;
 
-	std::string atlas_name = "Atlas" + atlas_n;
+    std::string atlas_name = "Atlas" + std::to_string(atlas_n);
 	m_texture = m_driver->addTexture(atlas_size, atlas_name, atlas_format);
 
 	m_texture_cache_id = m_tsrc->cacheExistentTexture(atlas_name, m_texture);
@@ -84,12 +86,14 @@ TextureAtlas::TextureAtlas(Client *client, u32 atlas_area, u32 max_mip_level, u3
 	for (auto &info_i : m_tiles_infos_refs) {
 		TileInfo &info = m_builder->getTileInfo(info_i);
 
-		if (info.tex)
-			m_texture->drawToSubImage(info.x, info.y, info.width, info.height, info.tex);
+        if (info.img) {
+            //infostream << "TextureAtlas: subimage name: " << info.tex->getName().getPath().c_str() << std::endl;
+            m_texture->drawToSubImage(info.x, info.y, info.width, info.height, info.img);
+        }
 	}
 
 	if (m_mip_maps)
-		m_texture->regenerateMipMapLevels(nullptr, 0, m_max_mip_level);
+        m_texture->regenerateMipMapLevels(0, m_max_mip_level);
 }
 
 /*!
@@ -107,15 +111,15 @@ u32 TextureAtlas::getFrameThickness() const
  * Generates a new more extended texture for some atlas tile.
  * The extension happens due to the adding the pixel frame.
  */
-video::ITexture *TextureAtlas::recreateTextureForFiltering(video::ITexture *tex, u32 ext_thickness)
+video::IImage *TextureAtlas::recreateImageForFiltering(video::IImage *img, u32 ext_thickness)
 {
 	// Download the pixel data of the tile from GPU into IImage
-	core::dimension2du old_size = tex->getSize();
-	video::ECOLOR_FORMAT color_format = tex->getColorFormat();
-	video::IImage *img = m_driver->createImageFromData(color_format,
-		old_size, tex->lock());
+    core::dimension2du old_size = img->getDimension();
+    video::ECOLOR_FORMAT color_format = img->getColorFormat();
+    //video::IImage *img = m_driver->createImageFromData(color_format,
+    //	old_size, tex->lock());
 
-	tex->unlock();
+    //tex->unlock();
 
 	core::dimension2du new_size(
 		old_size.Width + 2 * ext_thickness,
@@ -155,11 +159,11 @@ video::ITexture *TextureAtlas::recreateTextureForFiltering(video::ITexture *tex,
 			img->copyTo(ext_img, start_offsets[side] + offset_dirs[side] * offset,
 				pixel_sides[side]);
 
-	video::ITexture *new_tex = m_driver->addTexture("IncreasedTexture", ext_img);
+    //video::ITexture *new_tex = m_driver->addTexture("IncreasedTexture", ext_img);
 	img->drop();
-	ext_img->drop();
+    //ext_img->drop();
 
-	return new_tex;
+    return ext_img;
 }
 
 /*!
@@ -249,7 +253,7 @@ void TextureAtlas::updateAnimations(f32 time)
 	}
 
 	if (m_mip_maps && has_animated_tiles)
-		m_texture->regenerateMipMapLevels(nullptr, 0, m_max_mip_level);
+        m_texture->regenerateMipMapLevels(0, m_max_mip_level);
 }
 
 /*
@@ -279,24 +283,25 @@ void TextureAtlas::updateCrackAnimations(int new_crack)
 
 	for (const auto &crack_tile : m_crack_tiles) {
 		std::string s = crack_tile.second + itos(new_crack);
-		u32 new_texture_id = 0;
-		video::ITexture *new_texture =
-			m_tsrc->getTextureForMesh(s, &new_texture_id);
+        //u32 new_texture_id = 0;
+        //video::ITexture *new_texture =
+        //	m_tsrc->getTextureForMesh(s, &new_texture_id);
+        video::IImage *cracked_img = m_tsrc->loadAndCacheImage(s);
 
 		TileInfo &tile = m_builder->getTileInfo(crack_tile.first);
-		if (new_texture) {
+        if (cracked_img) {
 			has_crack_tiles = true;
-			m_texture->drawToSubImage(tile.x + atlas_size.Width/2, tile.y, tile.width, tile.height, new_texture);
+            m_texture->drawToSubImage(tile.x + atlas_size.Width/2, tile.y, tile.width, tile.height, cracked_img);
 		}
 	}
 
 	if (m_mip_maps && has_crack_tiles)
-		m_texture->regenerateMipMapLevels(nullptr, 0, m_max_mip_level);
+        m_texture->regenerateMipMapLevels(0, m_max_mip_level);
 }
 
 void AtlasBuilder::buildAtlases(Client *client, std::vector<TileInfo> &infos)
 {
-	m_tiles_infos = std::move(infos);
+    m_tiles_infos = std::move(infos);
 	m_mip_maps = g_settings->getBool("mip_map");
 	m_filtering = g_settings->getBool("bilinear_filter") ||
 		g_settings->getBool("trilinear_filter") || g_settings->getBool("anisotropic_filter");

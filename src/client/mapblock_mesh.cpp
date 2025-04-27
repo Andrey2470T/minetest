@@ -601,8 +601,7 @@ void PartialMeshBuffer::draw(video::IVideoDriver *driver) const
 MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data):
 	m_tsrc(client->getTextureSource()),
 	m_shdrsrc(client->getShaderSource()),
-	m_bounding_sphere_center((data->m_side_length * 0.5f - 0.5f) * BS),
-	m_last_daynight_ratio((u32) -1)
+    m_bounding_sphere_center((data->m_side_length * 0.5f - 0.5f) * BS)
 {
 	ZoneScoped;
 
@@ -645,7 +644,7 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data):
 
 	{
 		// Generate everything
-		MapblockMeshGenerator(data, &collector).generate();
+        MapblockMeshGenerator(data, &collector, m_tsrc).generate();
 	}
 
 	/*
@@ -679,7 +678,7 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data):
 			if (p.layer.material_flags & MATERIAL_FLAG_CRACK) {
 				// Find the texture name plus ^[crack:N:
 				std::ostringstream os(std::ios::binary);
-				os << m_tsrc->getTextureName(p.layer.texture_id) << "^[crack";
+                os << m_tsrc->getTextureName(p.layer.texture_id) << "^[crack";
 				if (p.layer.material_flags & MATERIAL_FLAG_CRACK_OVERLAY)
 					os << "o";  // use ^[cracko
 				u8 tiles = p.layer.scale;

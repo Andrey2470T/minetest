@@ -396,18 +396,13 @@ public:
 		Driver->getCacheHandler()->getTextureCache().set(0, prevTexture);
 	}
 
-	std::vector<IImage*> getImagesCache() override
-	{
-		return Images;
-	}
-
-	void drawToSubImage(int x, int y, int width, int height, ITexture *texture) override
+    void drawToSubImage(int x, int y, int width, int height, IImage *img) override
 	{
 		// This method works only for 2D textures currently
-		if (TextureType != GL_TEXTURE_2D || !texture)
+        if (TextureType != GL_TEXTURE_2D || !img)
 			return;
 
-		ECOLOR_FORMAT format = texture->getColorFormat();
+        ECOLOR_FORMAT format = img->getColorFormat();
 		GLint internal_format = 0;
 		GLenum pixel_format = 0;
 		GLenum pixeltype = 0;
@@ -417,28 +412,23 @@ public:
 			return;
 		}
 
-		std::vector<IImage*> imgs = texture->getImagesCache();
-
-		if (imgs.empty())
+        if (!img)
 			return;
-
-		void *data = imgs[0]->getData();
 
 		const ITexture *prevTexture = Driver->getCacheHandler()->getTextureCache().get(0);
 
 		Driver->getCacheHandler()->getTextureCache().set(0, this);
 
 		if (!IImage::isCompressedFormat(format))
-			GL.TexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, pixel_format, pixeltype, data);
+            GL.TexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, pixel_format, pixeltype, img->getData());
 		else {
 			u32 dataSize = IImage::getDataSizeFromFormat(format, width, height);
 
-			Driver->irrGlCompressedTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, pixel_format, dataSize, data);
+            Driver->irrGlCompressedTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, pixel_format, dataSize, img->getData());
 		}
 
+        //os::Printer::log("COpenGLCoreTexture: 3", "", ELL_INFORMATION);
 		TEST_GL_ERROR(Driver);
-
-		texture->unlock();
 
 		Driver->getCacheHandler()->getTextureCache().set(0, prevTexture);
 	}

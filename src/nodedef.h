@@ -731,7 +731,7 @@ public:
 	 */
 	void resolveCrossrefs();
 
-#ifndef SERVER
+#if CHECK_CLIENT_BUILD()
 	/*!
 	 * Provides access to the atlas builder
 	 */
@@ -832,7 +832,7 @@ private:
 	 */
 	ContentLightingFlags m_content_lighting_flag_cache[CONTENT_MAX + 1L];
 
-#ifndef SERVER
+#if CHECK_CLIENT_BUILD()
 	/*!
 	 * Texture atlas builder abstraction keeping and handling atlases.
 	 */

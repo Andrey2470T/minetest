@@ -118,6 +118,7 @@ public:
 	void insertSourceImage(const std::string &name, video::IImage *img);
 
 	u32 cacheExistentTexture(const std::string &name, video::ITexture *tex) override;
+    video::IImage *loadAndCacheImage(const std::string &name) override;
 
 	// Rebuild images and textures from the current set of source images
 	// Shall be called from the main thread.
@@ -463,6 +464,28 @@ u32 TextureSource::cacheExistentTexture(const std::string &name, video::ITexture
 	m_name_to_id[name] = id;
 
 	return id;
+}
+
+video::IImage *TextureSource::loadAndCacheImage(const std::string &name)
+{
+    video::IImage *cached_img = m_imagesource.get(name);
+
+    if (cached_img)
+        return cached_img;
+
+    std::set<std::string> source_image_names;
+    video::IImage *img = m_imagesource.generateImage(name, source_image_names);
+
+    video::IVideoDriver *driver = RenderingEngine::get_video_driver();
+    sanity_check(driver);
+
+    if (img) {
+        img = Align2Npot2(img, driver);
+        guiScalingCache(io::path(name.c_str()), driver, img);
+        m_imagesource.insertSourceImage(name, img, false);
+    }
+
+    return img;
 }
 
 void TextureSource::rebuildImagesAndTextures()

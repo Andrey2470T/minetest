@@ -46,7 +46,8 @@ struct FrameSpec
 {
 	FrameSpec() = default;
 
-	u32 texture_id = 0;
+    u32 texture_id = 0;
+    video::IImage *image = nullptr;
 	video::ITexture *texture = nullptr;
 };
 
@@ -119,11 +120,12 @@ struct TileLayer
 
 	// Ordered for size, please do not reorder
 
+    video::IImage *image = nullptr;
 	video::ITexture *texture = nullptr;
 
 	u32 shader_id = 0;
 
-	u32 texture_id = 0;
+    u32 texture_id = 0;
 
 	u16 animation_frame_length_ms = 0;
 	u16 animation_frame_count = 1;

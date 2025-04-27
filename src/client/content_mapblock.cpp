@@ -76,10 +76,12 @@ void MapblockMeshGenerator::replaceToAtlas(TileSpec &tile, bool outside_uv)
 		layer.atlas_used = enable_atlas && !outside_uv;
 
 		if (layer.atlas_used) {
+            //infostream << "replaceToAtlas: tiles_infos_index: " << layer.tiles_infos_index << std::endl;
 			TextureAtlas *atlas = nodedef->getAtlasBuilder()->getAtlas(layer.tiles_infos_index);
 
 			if (atlas) {
 				layer.texture_id = atlas->getTextureCacheId();
+                //infostream << "replaceToAtlas: atlas texture id: " << layer.texture_id << std::endl;
 				layer.texture = atlas->getTexture();
 			}
 		}
@@ -131,7 +133,7 @@ void MapblockMeshGenerator::getSpecialTile(int index, TileSpec *tile_ret, bool a
 		top_layer->material_flags |= MATERIAL_FLAG_CRACK;
 }
 
-void MapblockMeshGenerator::drawQuad(const TileSpec &tile, v3f *coords, const v3s16 &normal)
+void MapblockMeshGenerator::drawQuad(TileSpec &tile, v3f *coords, const v3s16 &normal)
 {
 	const v2f tcoords[4] = {v2f(0.0, 0.0), v2f(1.0, 0.0),
 		v2f(1.0, 1.0), v2f(0.0, 1.0)};
@@ -149,7 +151,7 @@ void MapblockMeshGenerator::drawQuad(const TileSpec &tile, v3f *coords, const v3
 			applyFacesShading(vertices[j].Color, normal2);
 		vertices[j].TCoords = tcoords[j];
 	}
-	replaceToAtlas(tile);
+    replaceToAtlas(tile);
 	collector->append(tile, vertices, 4, quad_indices, 6);
 }
 
@@ -238,7 +240,7 @@ enum class QuadDiagonal {
 //              and to choose diagonal to split the quad at.
 template <typename Fn>
 void MapblockMeshGenerator::drawCuboid(const aabb3f &box,
-		const TileSpec *tiles, int tilecount, const f32 *txc, u8 mask, Fn &&face_lighter)
+        TileSpec *tiles, int tilecount, const f32 *txc, u8 mask, Fn &&face_lighter)
 {
 	assert(tilecount >= 1 && tilecount <= 6); // pre-condition
 
@@ -251,7 +253,7 @@ void MapblockMeshGenerator::drawCuboid(const aabb3f &box,
 		const u16 *indices = diagonal == QuadDiagonal::Diag13 ? quad_indices_13 : quad_indices_02;
 		int tileindex = MYMIN(k, tilecount - 1);
 
-		replaceToAtlas(tiles[tileindex]);
+        replaceToAtlas(tiles[tileindex]);
 		collector->append(tiles[tileindex], &vertices[4 * k], 4, indices, 6);
 	}
 }
@@ -371,14 +373,14 @@ static inline int lightDiff(LightPair a, LightPair b)
 	return abs(a.lightDay - b.lightDay) + abs(a.lightNight - b.lightNight);
 }
 
-void MapblockMeshGenerator::drawAutoLightedCuboid(aabb3f box, const TileSpec &tile,
+void MapblockMeshGenerator::drawAutoLightedCuboid(aabb3f box, TileSpec &tile,
 		const f32 *txc, u8 mask)
 {
 	drawAutoLightedCuboid(box, &tile, 1, txc, mask);
 }
 
 void MapblockMeshGenerator::drawAutoLightedCuboid(aabb3f box,
-		const TileSpec *tiles, int tile_count, const f32 *txc, u8 mask)
+        TileSpec *tiles, int tile_count, const f32 *txc, u8 mask)
 {
 	bool scale = std::fabs(cur_node.f->visual_scale - 1.0f) > 1e-3f;
 	f32 texture_coord_buf[24];
@@ -760,7 +762,7 @@ void MapblockMeshGenerator::drawLiquidSides()
 					vertex.u, v);
 		};
 
-		replaceToAtlas(cur_liquid.tile);
+        replaceToAtlas(cur_liquid.tile);
 		collector->append(cur_liquid.tile, vertices, 4, quad_indices, 6);
 	}
 }
@@ -848,7 +850,7 @@ void MapblockMeshGenerator::drawLiquidTop()
 	infostream << "3 tcoord: " << vertices[2].TCoords.X << ", " << vertices[2].TCoords.Y << std::endl;
 	infostream << "4 tcoord: " << vertices[3].TCoords.X << ", " << vertices[3].TCoords.Y << std::endl;
 
-	replaceToAtlas(cur_liquid.tile_top);
+    replaceToAtlas(cur_liquid.tile_top);
 	collector->append(cur_liquid.tile_top, vertices, 4, quad_indices, 6);
 }
 
@@ -867,7 +869,7 @@ void MapblockMeshGenerator::drawLiquidBottom()
 		vertices[i].Pos += cur_node.origin;
 	}
 
-	replaceToAtlas(cur_liquid.tile_top);
+    replaceToAtlas(cur_liquid.tile_top);
 	collector->append(cur_liquid.tile_top, vertices, 4, quad_indices, 6);
 }
 
@@ -1166,7 +1168,7 @@ void MapblockMeshGenerator::drawSignlikeNode()
 	drawQuad(tile, vertices);
 }
 
-void MapblockMeshGenerator::drawPlantlikeQuad(const TileSpec &tile,
+void MapblockMeshGenerator::drawPlantlikeQuad(TileSpec &tile,
 		float rotation, float quad_offset, bool offset_top_only)
 {
 	const f32 scale = cur_plant.scale;
@@ -1247,7 +1249,7 @@ void MapblockMeshGenerator::drawPlantlikeQuad(const TileSpec &tile,
 	}
 }
 
-void MapblockMeshGenerator::drawPlantlike(const TileSpec &tile, bool is_rooted)
+void MapblockMeshGenerator::drawPlantlike(TileSpec &tile, bool is_rooted)
 {
 	cur_plant.draw_style = PLANT_STYLE_CROSS;
 	cur_plant.offset = v3f(0, 0, 0);
@@ -1359,7 +1361,7 @@ void MapblockMeshGenerator::drawPlantlikeRootedNode()
 	cur_node.p.Y--;
 }
 
-void MapblockMeshGenerator::drawFirelikeQuad(const TileSpec &tile, float rotation,
+void MapblockMeshGenerator::drawFirelikeQuad(TileSpec &tile, float rotation,
 		float opening_angle, float offset_h, float offset_v)
 {
 	const f32 scale = BS / 2 * cur_node.f->visual_scale;
@@ -1803,7 +1805,7 @@ void MapblockMeshGenerator::drawMeshNode()
 					outside_uv = is_outside_uv(vertex.TCoords);
 			}
 
-			replaceToAtlas(tile, outside_uv);
+            replaceToAtlas(tile, outside_uv);
 		} else {
 			bool is_light_source = cur_node.f->light_source != 0;
 			for (u32 k = 0; k < vertex_count; k++) {
@@ -1818,7 +1820,7 @@ void MapblockMeshGenerator::drawMeshNode()
 					outside_uv = is_outside_uv(vertex.TCoords);
 			}
 
-			replaceToAtlas(tile, outside_uv);
+            replaceToAtlas(tile, outside_uv);
 		}
 		collector->append(tile, vertices, vertex_count,
 			buf->getIndices(), buf->getIndexCount());

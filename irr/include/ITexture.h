@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "IImage.h"
 #include "IReferenceCounted.h"
 #include "SColor.h"
 #include "dimension2d.h"
@@ -190,10 +191,8 @@ public:
 	\param max_level Highest mipmap level until which necessary to generate mipmaps.*/
 	virtual void regenerateMipMapLevels(u32 layer = 0, u32 max_level = 1000) = 0;
 
-	virtual std::vector<IImage*> getImagesCache() = 0;
-
-	//! Draws the content pixels of the tile texture onto this texture.
-	virtual void drawToSubImage(int x, int y, int width, int height, ITexture *texture) = 0;
+    //! Draws the content pixels of the tile image onto this texture.
+    virtual void drawToSubImage(int x, int y, int width, int height, IImage *img) = 0;
 
 	//! Get original size of the texture.
 	/** The texture is usually scaled, if it was created with an unoptimal

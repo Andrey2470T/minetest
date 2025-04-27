@@ -674,7 +674,8 @@ static void fillTileAttribs(ITextureSource *tsrc, TileLayer *layer,
 		const TextureSettings &tsettings)
 {
 	layer->shader_id     = shader_id;
-	layer->texture       = tsrc->getTextureForMesh(tiledef.name, &layer->texture_id);
+    layer->image         = tsrc->loadAndCacheImage(tiledef.name);
+    layer->texture       = tsrc->getTextureForMesh(tiledef.name, &layer->texture_id);
 	layer->material_type = material_type;
 
 	bool has_scale = tiledef.scale > 0;
@@ -714,9 +715,9 @@ static void fillTileAttribs(ITextureSource *tsrc, TileLayer *layer,
 	// Animation parameters
 	int frame_count = 1;
 	if (layer->material_flags & MATERIAL_FLAG_ANIMATION) {
-		assert(layer->texture);
+        assert(layer->texture);
 		int frame_length_ms = 0;
-		tiledef.animation.determineParams(layer->texture->getOriginalSize(),
+        tiledef.animation.determineParams(layer->texture->getOriginalSize(),
 				&frame_count, &frame_length_ms, NULL);
 		layer->animation_frame_count = frame_count;
 		layer->animation_frame_length_ms = frame_length_ms;
@@ -725,7 +726,7 @@ static void fillTileAttribs(ITextureSource *tsrc, TileLayer *layer,
 	if (frame_count == 1) {
 		layer->material_flags &= ~MATERIAL_FLAG_ANIMATION;
 	} else {
-		assert(layer->texture);
+        assert(layer->texture);
 		if (!layer->frames)
 			layer->frames = new std::vector<FrameSpec>();
 		layer->frames->resize(frame_count);
@@ -735,10 +736,11 @@ static void fillTileAttribs(ITextureSource *tsrc, TileLayer *layer,
 			os.str("");
 			os << tiledef.name;
 			tiledef.animation.getTextureModifer(os,
-					layer->texture->getOriginalSize(), i);
+                layer->texture->getOriginalSize(), i);
 
 			FrameSpec &frame = (*layer->frames)[i];
-			frame.texture = tsrc->getTextureForMesh(os.str(), &frame.texture_id);
+            frame.image = tsrc->loadAndCacheImage(os.str());
+            frame.texture = tsrc->getTextureForMesh(os.str(), &frame.texture_id);
 		}
 	}
 }
@@ -931,7 +933,7 @@ void ContentFeatures::updateTextures(ITextureSource *tsrc, IShaderSource *shdsrc
 				tdef[j].backface_culling, tsettings);
 		auto added_tile = add_unique_tile(TileInfo(tiles[j].layers[0]));
 		tiles[j].layers[0].tiles_infos_index = (u32)std::distance(tiles_infos.begin(), added_tile);
-		infostream << "updateTextures() tiles_infos_index: " << (tiles[j].layers[0].tiles_infos_index) << std::endl;
+        //infostream << "updateTextures() tiles_infos_index: " << (tiles[j].layers[0].tiles_infos_index) << std::endl;
 
 		if (!tdef_overlay[j].name.empty()) {
 			fillTileAttribs(tsrc, &tiles[j].layers[1], tiles[j], tdef_overlay[j],
@@ -940,7 +942,7 @@ void ContentFeatures::updateTextures(ITextureSource *tsrc, IShaderSource *shdsrc
 
 			added_tile = add_unique_tile(TileInfo(tiles[j].layers[1]));
 			tiles[j].layers[1].tiles_infos_index = (u32)std::distance(tiles_infos.begin(), added_tile);
-			infostream << "updateTextures() tiles_infos_index: " << (tiles[j].layers[1].tiles_infos_index) << std::endl;
+            //infostream << "updateTextures() tiles_infos_index: " << (tiles[j].layers[1].tiles_infos_index) << std::endl;
 		}
 		tiles[j].layers[0].need_polygon_offset = !tiles[j].layers[1].empty();
 	}
@@ -961,7 +963,7 @@ void ContentFeatures::updateTextures(ITextureSource *tsrc, IShaderSource *shdsrc
 				tdef_spec[j].backface_culling, tsettings);
 		auto added_tile = add_unique_tile(TileInfo(special_tiles[j].layers[0]));
 		special_tiles[j].layers[0].tiles_infos_index = (u32)std::distance(tiles_infos.begin(), added_tile);
-		infostream << "updateTextures() tiles_infos_index: " << (special_tiles[j].layers[0].tiles_infos_index) << std::endl;
+        //infostream << "updateTextures() tiles_infos_index: " << (special_tiles[j].layers[0].tiles_infos_index) << std::endl;
 	}
 
 	if (param_type_2 == CPT2_COLOR ||
@@ -1004,7 +1006,7 @@ void ContentFeatures::updateTextures(ITextureSource *tsrc, IShaderSource *shdsrc
 NodeDefManager::NodeDefManager()
 {
 	clear();
-#ifndef CHECK_CLIENT_BUILD()
+#if CHECK_CLIENT_BUILD()
 	m_atlas_builder = std::make_unique<AtlasBuilder>();
 #endif
 }

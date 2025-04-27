@@ -35,6 +35,10 @@ private:
 struct ImageSource {
 	ImageSource();
 
+    video::IImage *get(const std::string &name)
+    {
+        return m_sourcecache.get(name);
+    }
 	/*! Generates an image from a full string like
 	 * "stone.png^mineral_coal.png^[crack:1:0".
 	 * The returned Image should be dropped.
