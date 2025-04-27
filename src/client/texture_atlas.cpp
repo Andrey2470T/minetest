@@ -79,6 +79,9 @@ TextureAtlas::TextureAtlas(Client *client, u32 atlas_area, u32 max_mip_level, u3
 	video::ECOLOR_FORMAT atlas_format = video::ECF_A32B32G32R32F;
 
     std::string atlas_name = "Atlas" + std::to_string(atlas_n);
+    video::IVideoDriver *vdrv = client->getSceneManager()->getVideoDriver();
+    infostream << "TextureAtlas(): max texture size: " << vdrv->getDriverAttributes().getAttributeAsInt("MaxTextureSize") << std::endl;
+    infostream << "TextureAtlas(): atlas_size: " << atlas_size.Width << ", " << atlas_size.Height << std::endl;
 	m_texture = m_driver->addTexture(atlas_size, atlas_name, atlas_format);
 
 	m_texture_cache_id = m_tsrc->cacheExistentTexture(atlas_name, m_texture);
